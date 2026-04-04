@@ -1,24 +1,24 @@
-import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
+import { timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'htmlpush_admin_token';
 const TOKEN_EXPIRY = 60 * 60 * 24 * 7; // 7天
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
+export function verifyPassword(input: string, expected: string): boolean {
+  if (input.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(input), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
-
-export async function createToken(): Promise<string> {
-  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return bcrypt.hash(token, 10);
+export function createToken(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export async function setAuthCookie(): Promise<void> {
-  const token = await createToken();
+  const token = createToken();
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,

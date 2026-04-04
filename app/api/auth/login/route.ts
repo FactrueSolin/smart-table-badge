@@ -3,14 +3,15 @@ import { verifyPassword, setAuthCookie, getAdminPassword } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json();
+    const body = await request.json() as { password?: string };
+    const { password } = body;
 
     if (!password) {
       return NextResponse.json({ error: '请输入密码' }, { status: 400 });
     }
 
     const adminPassword = getAdminPassword();
-    const valid = await verifyPassword(password, adminPassword);
+    const valid = verifyPassword(password, adminPassword);
 
     if (!valid) {
       return NextResponse.json({ error: '密码错误' }, { status: 401 });
