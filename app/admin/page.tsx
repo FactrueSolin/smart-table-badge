@@ -61,6 +61,7 @@ export default function AdminPage() {
   const [editorName, setEditorName] = useState('');
   const [editorContent, setEditorContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editingPageId, setEditingPageId] = useState<string | null>(null); // 正在编辑的页面 ID
 
   // 规范内容
   const [guideContent, setGuideContent] = useState('');
@@ -128,9 +129,28 @@ export default function AdminPage() {
     const content = await file.text();
     setEditorName(file.name.replace(/\.html?$/i, ''));
     setEditorContent(content);
+    setEditingPageId(null);
     setActiveTab('editor');
   };
 
+  // 加载页面内容进行编辑
+  const handleEditPage = async (page: PageInfo) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/pages/${page.id}`);
+      if (res.ok) {
+        const content = await res.text();
+        setEditorName(page.name);
+        setEditorContent(content);
+        setEditingPageId(page.id);
+        setActiveTab('editor');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 保存编辑器内容（新建或更新）
   const handleSaveEditor = async () => {
     if (!editorContent.trim()) return;
     setSaving(true);
@@ -140,10 +160,19 @@ export default function AdminPage() {
       formData.append('file', blob, `${editorName || 'page'}.html`);
       formData.append('name', editorName || '未命名页面');
 
-      const res = await fetch('/api/pages', { method: 'POST', body: formData });
+      let res: Response;
+      if (editingPageId) {
+        // 更新现有页面：先删除旧文件，再上传新文件
+        await fetch(`/api/pages/${editingPageId}`, { method: 'DELETE' });
+        res = await fetch('/api/pages', { method: 'POST', body: formData });
+      } else {
+        res = await fetch('/api/pages', { method: 'POST', body: formData });
+      }
+
       if (res.ok) {
         setEditorName('');
         setEditorContent('');
+        setEditingPageId(null);
         setActiveTab('pages');
         await fetchData();
       }
@@ -180,6 +209,7 @@ export default function AdminPage() {
     if (tab === 'editor') {
       setEditorName('');
       setEditorContent('');
+      setEditingPageId(null);
     }
     setActiveTab(tab);
   };
@@ -302,6 +332,12 @@ export default function AdminPage() {
                             切换
                           </button>
                         )}
+                        <button
+                          onClick={() => handleEditPage(page)}
+                          className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-full hover:bg-violet-500/20 transition-colors"
+                        >
+                          编辑
+                        </button>
                         <a
                           href={`/api/pages/${page.id}`}
                           target="_blank"
@@ -326,19 +362,40 @@ export default function AdminPage() {
         )}
 
         {activeTab === 'editor' && (
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">HTML 代码编辑</h2>
-              <button
-                onClick={handleSaveEditor}
-                disabled={saving || !editorContent.trim()}
-                className="px-4 py-2 text-sm font-medium rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? '保存中...' : '保存为页面'}
-              </button>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">
+                  {editingPageId ? '编辑页面' : '新建页面'}
+                </h2>
+                {editingPageId && (
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    编辑完成后点击"保存"更新页面
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setEditorName('');
+                    setEditorContent('');
+                    setEditingPageId(null);
+                  }}
+                  className="px-3 py-2 text-sm font-medium rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveEditor}
+                  disabled={saving || !editorContent.trim()}
+                  className="px-4 py-2 text-sm font-medium rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {saving ? '保存中...' : '保存'}
+                </button>
+              </div>
             </div>
 
-            <div className="mb-4">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
               <input
                 type="text"
                 value={editorName}
@@ -348,14 +405,40 @@ export default function AdminPage() {
               />
             </div>
 
-            <textarea
-              ref={textareaRef}
-              value={editorContent}
-              onChange={(e) => setEditorContent(e.target.value)}
-              placeholder="在此输入 HTML 代码..."
-              spellCheck={false}
-              className="w-full h-96 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 dark:bg-zinc-950 text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-            />
+            {/* 左右分栏：编辑 + 预览 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-zinc-200 dark:divide-zinc-800">
+              {/* 左侧：代码编辑 */}
+              <div className="p-4">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">HTML 代码</p>
+                <textarea
+                  ref={textareaRef}
+                  value={editorContent}
+                  onChange={(e) => setEditorContent(e.target.value)}
+                  placeholder="在此输入 HTML 代码..."
+                  spellCheck={false}
+                  className="w-full h-[60vh] px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* 右侧：实时预览 */}
+              <div className="p-4">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">实时预览</p>
+                <div className="w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white overflow-hidden">
+                  {editorContent ? (
+                    <iframe
+                      srcDoc={editorContent}
+                      className="w-full h-full border-0"
+                      title="preview"
+                      sandbox="allow-scripts"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-zinc-400 text-sm">
+                      输入代码后此处将实时预览
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
