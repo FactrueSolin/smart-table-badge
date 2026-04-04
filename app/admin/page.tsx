@@ -63,6 +63,11 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [editingPageId, setEditingPageId] = useState<string | null>(null); // 正在编辑的页面 ID
 
+  // AI 状态
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const aiAbortRef = useRef<AbortController | null>(null);
+
   // 规范内容
   const [guideContent, setGuideContent] = useState('');
   const [guideLoading, setGuideLoading] = useState(false);
@@ -218,6 +223,55 @@ export default function AdminPage() {
     await navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // AI 生成 HTML
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiGenerating(true);
+    const controller = new AbortController();
+    aiAbortRef.current = controller;
+
+    try {
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt, currentHtml: editorContent }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        const error = await res.json().catch(() => ({ error: '请求失败' }));
+        alert(`AI 生成失败: ${error.error}`);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        accumulated += text;
+        setEditorContent(accumulated);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // 用户主动打断，正常结束
+      } else {
+        alert('AI 生成中断');
+      }
+    } finally {
+      setAiGenerating(false);
+      aiAbortRef.current = null;
+    }
+  };
+
+  // 停止 AI 生成
+  const handleAIStop = () => {
+    aiAbortRef.current?.abort();
   };
 
   // 等待认证结果时显示加载
@@ -403,6 +457,49 @@ export default function AdminPage() {
                 placeholder="页面名称（可选）"
                 className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
               />
+            </div>
+
+            {/* AI 输入栏 */}
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !aiGenerating) {
+                        e.preventDefault();
+                        handleAIGenerate();
+                      }
+                    }}
+                    placeholder="用自然语言描述你想要的页面效果，AI 会自动生成 HTML"
+                    disabled={aiGenerating}
+                    className="w-full px-4 py-2.5 pr-24 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all text-sm disabled:opacity-50"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {aiGenerating ? (
+                      <button
+                        onClick={handleAIStop}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors"
+                      >
+                        停止
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAIGenerate}
+                        disabled={!aiPrompt.trim()}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        AI 生成
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+                提示：AI 会参考当前编辑器中的代码进行修改，或从零生成
+              </p>
             </div>
 
             {/* 左右分栏：编辑 + 预览 */}
