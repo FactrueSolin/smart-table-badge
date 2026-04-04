@@ -24,6 +24,16 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const { content } = body as { content: string };
+
+    const requiredPlaceholders = ['{{规范内容}}', '{{当前代码}}', '{{用户需求}}'];
+    const missing = requiredPlaceholders.filter((p) => !content.includes(p));
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { error: `模板缺少占位符: ${missing.join('、')}` },
+        { status: 400 }
+      );
+    }
+
     writeFileSync(TEMPLATE_PATH, content, 'utf-8');
     return NextResponse.json({ success: true });
   } catch {

@@ -49,13 +49,31 @@ describe('API: /api/prompt-template', () => {
       expect(response.status).toBe(401)
     })
 
-    it('认证成功保存模板', async () => {
+    it('缺少占位符返回 400', async () => {
       const { isAuthenticated } = await import('@/lib/auth')
       vi.mocked(isAuthenticated).mockResolvedValue(true)
 
       const request = new NextRequest('http://localhost/api/prompt-template', {
         method: 'PUT',
-        body: JSON.stringify({ content: 'new template content' }),
+        body: JSON.stringify({ content: 'invalid template without placeholders' }),
+      })
+
+      const { PUT } = await import('@/app/api/prompt-template/route')
+      const response = await PUT(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toContain('缺少占位符')
+    })
+
+    it('包含所有占位符保存成功', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
+      const validTemplate = '规范: {{规范内容}}\n代码: {{当前代码}}\n需求: {{用户需求}}'
+      const request = new NextRequest('http://localhost/api/prompt-template', {
+        method: 'PUT',
+        body: JSON.stringify({ content: validTemplate }),
       })
 
       const { PUT } = await import('@/app/api/prompt-template/route')

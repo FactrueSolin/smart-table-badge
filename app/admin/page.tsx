@@ -242,6 +242,15 @@ export default function AdminPage() {
   };
 
   const handleSavePromptTemplate = async () => {
+    const requiredPlaceholders = ['{{规范内容}}', '{{当前代码}}', '{{用户需求}}'];
+    const missing = requiredPlaceholders.filter((p) => !promptTemplate.includes(p));
+    if (missing.length > 0) {
+      const confirmed = confirm(
+        `模板缺少占位符: ${missing.join('、')}\n\n这会导致 AI 生成失败。是否仍然保存？`
+      );
+      if (!confirmed) return;
+    }
+
     setPromptSaving(true);
     try {
       const res = await fetch('/api/prompt-template', {
@@ -250,7 +259,8 @@ export default function AdminPage() {
         body: JSON.stringify({ content: promptTemplate }),
       });
       if (!res.ok) {
-        alert('保存失败');
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '保存失败');
       }
     } finally {
       setPromptSaving(false);
