@@ -1,0 +1,13 @@
+services:
+  htmlpush:
+    build: .
+    ports:
+      - "43210:3000"
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+    volumes:
+      - htmlpush-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  htmlpush-data:

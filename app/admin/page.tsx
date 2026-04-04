@@ -9,7 +9,224 @@ interface PageInfo {
   uploadedAt: string;
 }
 
-type Tab = 'pages' | 'editor';
+type Tab = 'pages' | 'editor' | 'guide' | 'api';
+
+const htmlGuideMarkdown = `# 手机展示 HTML 规范
+
+## 概述
+
+编写适合手机横屏全屏展示的 HTML 页面。手机作为"桌面显示器"使用时，页面应充分利用屏幕空间，避免滚动条和多余留白。
+
+## 设备特性
+
+- **方向**：横屏放置（landscape）
+- **展示方式**：全屏显示，无浏览器地址栏和工具栏
+- **交互**：无用户交互，纯展示用途
+
+## HTML 模板
+
+\`\`\`html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>展示页面</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #000; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .container {
+      width: 100vw; height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .content {
+      width: 100%; height: 100%; padding: 2rem;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="content">
+      <h1>欢迎</h1>
+    </div>
+  </div>
+</body>
+</html>
+\`\`\`
+
+## 关键要点
+
+### 1. Viewport 设置
+
+\`\`\`html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+\`\`\`
+
+- \`width=device-width\`：宽度等于设备宽度
+- \`initial-scale=1.0\`：初始缩放比例为 1
+- \`maximum-scale=1.0\`：禁止放大
+- \`user-scalable=no\`：禁止用户缩放
+
+### 2. 全屏布局
+
+\`\`\`css
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+\`\`\`
+
+- 禁止滚动条出现
+- 内容应适配屏幕尺寸，避免溢出
+
+### 3. 横屏适配
+
+使用 CSS 媒体查询针对横屏优化：
+
+\`\`\`css
+@media (orientation: landscape) {
+  .content {
+    flex-direction: row;
+  }
+}
+\`\`\`
+
+### 4. 字体大小
+
+使用 \`vw\`/\`vh\` 单位让字体随屏幕自适应：
+
+\`\`\`css
+h1 { font-size: 8vw; }
+p { font-size: 3vw; }
+\`\`\`
+
+### 5. 背景与颜色
+
+- 推荐深色背景（\`#000\` 或 \`#111\`），减少屏幕刺眼
+- 文字使用高对比度颜色（\`#fff\` 或 \`#eee\`）
+
+### 6. 避免的内容
+
+- 不要使用 \`position: fixed\` 固定元素（可能遮挡内容）
+- 不要使用外部链接或需要交互的元素
+- 不要使用过小的字体（横屏下难以阅读）
+
+## 示例：信息展示页面
+
+\`\`\`html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; color: #fff; font-family: sans-serif; }
+    .container { width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; }
+    .title { font-size: 6vw; font-weight: bold; }
+    .subtitle { font-size: 3vw; color: #888; }
+    .stats { display: flex; gap: 8vw; margin-top: 4vh; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 10vw; font-weight: bold; color: #4ade80; }
+    .stat-label { font-size: 2.5vw; color: #666; margin-top: 1vh; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="title">今日数据</div>
+    <div class="subtitle">实时更新</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-value">128</div><div class="stat-label">访问量</div></div>
+      <div class="stat"><div class="stat-value">56</div><div class="stat-label">订单数</div></div>
+      <div class="stat"><div class="stat-value">¥9.2k</div><div class="stat-label">销售额</div></div>
+    </div>
+  </div>
+</body>
+</html>
+\`\`\`
+
+## 示例：图片轮播页面
+
+\`\`\`html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    .slideshow { width: 100vw; height: 100vh; position: relative; }
+    .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; }
+    .slide.active { opacity: 1; }
+    .slide img { width: 100%; height: 100%; object-fit: cover; }
+  </style>
+</head>
+<body>
+  <div class="slideshow">
+    <div class="slide active"><img src="https://picsum.photos/800/400?random=1" alt=""></div>
+    <div class="slide"><img src="https://picsum.photos/800/400?random=2" alt=""></div>
+    <div class="slide"><img src="https://picsum.photos/800/400?random=3" alt=""></div>
+  </div>
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let current = 0;
+    setInterval(() => {
+      slides[current].classList.remove('active');
+      current = (current + 1) % slides.length;
+      slides[current].classList.add('active');
+    }, 5000);
+  </script>
+</body>
+</html>
+\`\`\`
+`;
+
+const apiDocMarkdown = `# HTMLPush API 文档
+
+## 页面管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | \`/api/pages\` | 获取所有已上传的 HTML 页面列表 |
+| POST | \`/api/pages\` | 上传新的 HTML 文件（multipart/form-data） |
+| GET | \`/api/pages/[id]\` | 获取指定页面的 HTML 内容 |
+| DELETE | \`/api/pages/[id]\` | 删除指定页面 |
+
+## 展示控制
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | \`/api/current\` | 获取当前展示的页面信息 |
+| PUT | \`/api/current\` | 切换当前展示的页面（body: \`{ pageId: string }\`） |
+
+## 实时推送
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | \`/api/sse\` | SSE 连接端点，推送内容变更事件 |
+
+SSE 事件格式：
+\`\`\`
+event: content-changed
+data: {"pageId": "xxx", "timestamp": 1234567890}
+\`\`\`
+
+## 认证
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | \`/api/auth/login\` | 管理后台登录（body: \`{ password: string }\`） |
+| POST | \`/api/auth/logout\` | 退出登录 |
+| GET | \`/api/auth/check\` | 检查认证状态 |
+`;
 
 export default function AdminPage() {
   const [pages, setPages] = useState<PageInfo[]>([]);
@@ -22,6 +239,9 @@ export default function AdminPage() {
   const [editorName, setEditorName] = useState('');
   const [editorContent, setEditorContent] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // 复制状态
+  const [copied, setCopied] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -124,6 +344,12 @@ export default function AdminPage() {
     setActiveTab(tab);
   };
 
+  const handleCopyMarkdown = async (content: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   // 等待认证结果时显示加载
   if (authenticated === null) {
     return (
@@ -145,34 +371,34 @@ export default function AdminPage() {
     );
   }
 
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'pages', label: '页面管理' },
+    { key: 'editor', label: '代码编辑' },
+    { key: 'guide', label: 'HTML 规范' },
+    { key: 'api', label: 'API 文档' },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors">
       {/* 顶部导航 */}
       <header className="sticky top-0 z-10 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">HTMLPush</h1>
-            <nav className="flex gap-1">
-              <button
-                onClick={() => handleTabChange('pages')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  activeTab === 'pages'
-                    ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                页面管理
-              </button>
-              <button
-                onClick={() => handleTabChange('editor')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  activeTab === 'editor'
-                    ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                代码编辑
-              </button>
+            <nav className="flex gap-1 ml-4">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    activeTab === tab.key
+                      ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </nav>
           </div>
           <button
@@ -185,7 +411,7 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        {activeTab === 'pages' ? (
+        {activeTab === 'pages' && (
           <div className="space-y-6">
             {/* 上传区域 */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
@@ -257,8 +483,9 @@ export default function AdminPage() {
               )}
             </div>
           </div>
-        ) : (
-          /* 代码编辑器 */
+        )}
+
+        {activeTab === 'editor' && (
           <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">HTML 代码编辑</h2>
@@ -289,6 +516,44 @@ export default function AdminPage() {
               spellCheck={false}
               className="w-full h-96 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 dark:bg-zinc-950 text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
             />
+          </div>
+        )}
+
+        {activeTab === 'guide' && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">手机展示 HTML 规范</h2>
+              <button
+                onClick={() => handleCopyMarkdown(htmlGuideMarkdown)}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                {copied ? '已复制' : '复制 Markdown'}
+              </button>
+            </div>
+            <div className="p-6">
+              <pre className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 font-mono leading-relaxed">
+                {htmlGuideMarkdown}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'api' && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">API 文档</h2>
+              <button
+                onClick={() => handleCopyMarkdown(apiDocMarkdown)}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                {copied ? '已复制' : '复制 Markdown'}
+              </button>
+            </div>
+            <div className="p-6">
+              <pre className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 font-mono leading-relaxed">
+                {apiDocMarkdown}
+              </pre>
+            </div>
           </div>
         )}
       </main>
