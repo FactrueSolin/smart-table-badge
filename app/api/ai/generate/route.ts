@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAIConfig, getGuideContent, buildSystemPrompt, buildUserMessage, streamToLLM } from '@/lib/ai';
+import { getAIConfig, getGuideContent, getPromptTemplate, buildPrompt, streamToLLM } from '@/lib/ai';
 import { isAuthenticated } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
 
     const config = getAIConfig();
     const guideContent = await getGuideContent();
-    const systemPrompt = buildSystemPrompt(guideContent);
-    const userMessage = buildUserMessage(prompt, currentHtml || null);
+    const promptTemplate = await getPromptTemplate();
+    const fullPrompt = buildPrompt(promptTemplate, guideContent, prompt, currentHtml || null);
 
-    const stream = await streamToLLM(config, systemPrompt, userMessage, request.signal);
+    const stream = await streamToLLM(config, fullPrompt, request.signal);
 
     return new NextResponse(stream, {
       headers: {

@@ -24,24 +24,16 @@ export async function getGuideContent(): Promise<string> {
   return readFileSync(guidePath, 'utf-8');
 }
 
-export function buildSystemPrompt(guideContent: string): string {
-  return `${guideContent}
-
-重要：只输出完整的 HTML 代码，不要输出任何解释文字、markdown 标记或代码块标记。直接以 <!DOCTYPE html> 开头。`;
+export async function getPromptTemplate(): Promise<string> {
+  const templatePath = join(process.cwd(), 'docs', '页面生成提示词.md');
+  return readFileSync(templatePath, 'utf-8');
 }
 
-export function buildUserMessage(prompt: string, currentHtml: string | null): string {
-  if (currentHtml && currentHtml.trim()) {
-    return `当前 HTML 代码：
-\`\`\`html
-${currentHtml}
-\`\`\`
-
-用户需求：${prompt}
-
-请基于当前代码进行修改，返回修改后的完整 HTML。`;
-  }
-  return `用户需求：${prompt}`;
+export function buildPrompt(template: string, guideContent: string, prompt: string, currentHtml: string | null): string {
+  return template
+    .replace('{{规范内容}}', guideContent)
+    .replace('{{当前代码}}', currentHtml ? `\`\`\`html\n${currentHtml}\n\`\`\`` : '（无，从零生成）')
+    .replace('{{用户需求}}', prompt);
 }
 
 /**
@@ -50,8 +42,7 @@ ${currentHtml}
  */
 export async function streamToLLM(
   config: AIConfig,
-  systemPrompt: string,
-  userMessage: string,
+  fullPrompt: string,
   signal: AbortSignal
 ): Promise<ReadableStream> {
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -63,13 +54,9 @@ export async function streamToLLM(
     body: JSON.stringify({
       model: config.model,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
+        { role: 'user', content: fullPrompt },
       ],
       stream: true,
-      stream_options: {
-        include_usage: false,
-      },
     }),
     signal,
   });
@@ -97,7 +84,7 @@ export async function streamToLLM(
           while (true) {
             const { done, value } = await reader.read();
             if (done) {
-              controller.enqueue(encoder.encode('D\n'));
+              controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
               controller.close();
               return;
             }
@@ -112,7 +99,7 @@ export async function streamToLLM(
 
               const data = trimmed.slice(6);
               if (data === '[DONE]') {
-                controller.enqueue(encoder.encode('D\n'));
+                controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
                 controller.close();
                 return;
               }
@@ -123,15 +110,17 @@ export async function streamToLLM(
                     delta?: {
                       content?: string;
                       reasoning_content?: string;
+                      thinking?: string;
                     };
                   }>;
                 };
                 const delta = json.choices?.[0]?.delta;
-                if (delta?.reasoning_content) {
-                  controller.enqueue(encoder.encode(`T:${delta.reasoning_content}\n`));
+                const thinking = delta?.reasoning_content || delta?.thinking;
+                if (thinking) {
+                  controller.enqueue(encoder.encode(JSON.stringify({ type: 'thinking', content: thinking }) + '\n'));
                 }
                 if (delta?.content) {
-                  controller.enqueue(encoder.encode(`C:${delta.content}\n`));
+                  controller.enqueue(encoder.encode(JSON.stringify({ type: 'content', content: delta.content }) + '\n'));
                 }
               } catch {
                 // 忽略解析错误
@@ -140,7 +129,7 @@ export async function streamToLLM(
           }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') {
-            controller.enqueue(encoder.encode('D\n'));
+            controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
             controller.close();
           } else {
             controller.error(error);

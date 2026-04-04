@@ -9,7 +9,7 @@ interface PageInfo {
   uploadedAt: string;
 }
 
-type Tab = 'pages' | 'editor' | 'guide' | 'api';
+type Tab = 'pages' | 'editor' | 'guide' | 'api' | 'prompt';
 
 const apiDocMarkdown = `# HTMLPush API 文档
 
@@ -70,27 +70,21 @@ export default function AdminPage() {
   const [aiThinking, setAiThinking] = useState('');
   const [aiThinkingExpanded, setAiThinkingExpanded] = useState(false);
 
-  // 预览防闪烁：生成过程中延迟更新预览
-  const [previewContent, setPreviewContent] = useState('');
-  const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 规范内容
   const [guideContent, setGuideContent] = useState('');
   const [guideLoading, setGuideLoading] = useState(false);
+
+  // 提示词模板
+  const [promptTemplate, setPromptTemplate] = useState('');
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptSaving, setPromptSaving] = useState(false);
 
   // 复制状态
   const [copied, setCopied] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 清理预览定时器
-  useEffect(() => {
-    return () => {
-      if (previewTimerRef.current) {
-        clearTimeout(previewTimerRef.current);
-      }
-    };
-  }, []);
 
   // 检查认证状态
   useEffect(() => {
@@ -124,6 +118,19 @@ export default function AdminPage() {
         .catch(() => setGuideLoading(false));
     }
   }, [activeTab, guideContent]);
+
+  useEffect(() => {
+    if (activeTab === 'prompt' && !promptTemplate) {
+      setPromptLoading(true);
+      fetch('/api/prompt-template')
+        .then((res) => res.json())
+        .then((data) => {
+          setPromptTemplate(data.content || '');
+          setPromptLoading(false);
+        })
+        .catch(() => setPromptLoading(false));
+    }
+  }, [activeTab, promptTemplate]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -234,13 +241,29 @@ export default function AdminPage() {
     setActiveTab(tab);
   };
 
+  const handleSavePromptTemplate = async () => {
+    setPromptSaving(true);
+    try {
+      const res = await fetch('/api/prompt-template', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: promptTemplate }),
+      });
+      if (!res.ok) {
+        alert('保存失败');
+      }
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
   const handleCopyMarkdown = async (content: string) => {
     await navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // AI 生成 HTML
+  // AI 生成 HTML（JSON Lines 协议，编辑器与预览共享 editorContent）
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setAiGenerating(true);
@@ -249,8 +272,33 @@ export default function AdminPage() {
     const controller = new AbortController();
     aiAbortRef.current = controller;
 
-    let htmlAccum = '';
+    let rawAccum = '';
     let thinkingAccum = '';
+
+    // 流式提取 HTML：在原始文本中查找 ```html 开始位置，截取之后的内容
+    const extractHtmlStream = (text: string): string => {
+      const htmlIdx = text.toLowerCase().indexOf('```html');
+      if (htmlIdx !== -1) {
+        const startIdx = htmlIdx + 7;
+        let html = text.slice(startIdx);
+        const endIdx = html.lastIndexOf('```');
+        if (endIdx !== -1) {
+          html = html.slice(0, endIdx);
+        }
+        return html.trimStart();
+      }
+      const genericIdx = text.indexOf('```');
+      if (genericIdx !== -1) {
+        const startIdx = genericIdx + 3;
+        let html = text.slice(startIdx);
+        const endIdx = html.lastIndexOf('```');
+        if (endIdx !== -1) {
+          html = html.slice(0, endIdx);
+        }
+        return html.trimStart();
+      }
+      return '';
+    };
 
     try {
       const res = await fetch('/api/ai/generate', {
@@ -268,37 +316,35 @@ export default function AdminPage() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let lineBuffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
+        lineBuffer += text;
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (!line) continue;
-          if (line === 'D') continue; // 完成标记
+          if (!line.trim()) continue;
 
-          const type = line[0];
-          const content = line.slice(2);
+          try {
+            const msg = JSON.parse(line) as { type: string; content?: string };
 
-          if (type === 'T') {
-            // 思考内容
-            thinkingAccum += content;
-            setAiThinking(thinkingAccum);
-          } else if (type === 'C') {
-            // HTML 代码
-            htmlAccum += content;
-            setEditorContent(htmlAccum);
-
-            // 防闪烁：延迟更新预览（500ms debounce）
-            if (previewTimerRef.current) {
-              clearTimeout(previewTimerRef.current);
+            if (msg.type === 'done') {
+              continue;
+            } else if (msg.type === 'thinking' && msg.content) {
+              thinkingAccum += msg.content;
+              setAiThinking(thinkingAccum);
+            } else if (msg.type === 'content' && msg.content) {
+              rawAccum += msg.content;
+              const html = extractHtmlStream(rawAccum);
+              setEditorContent(html);
             }
-            previewTimerRef.current = setTimeout(() => {
-              setPreviewContent(htmlAccum);
-            }, 500);
+          } catch {
+            // 忽略解析错误
           }
         }
       }
@@ -311,12 +357,6 @@ export default function AdminPage() {
     } finally {
       setAiGenerating(false);
       aiAbortRef.current = null;
-      // 生成完成，立即更新预览
-      if (previewTimerRef.current) {
-        clearTimeout(previewTimerRef.current);
-        previewTimerRef.current = null;
-      }
-      setPreviewContent(htmlAccum);
     }
   };
 
@@ -349,6 +389,7 @@ export default function AdminPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'pages', label: '页面管理' },
     { key: 'editor', label: '代码编辑' },
+    { key: 'prompt', label: '提示词' },
     { key: 'guide', label: 'HTML 规范' },
     { key: 'api', label: 'API 文档' },
   ];
@@ -591,19 +632,18 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* 右侧：实时预览 */}
+              {/* 右侧：实时预览（与编辑器完全同步） */}
               <div className="p-4">
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">实时预览</p>
-                <div className="w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 overflow-hidden">
-                  {previewContent ? (
-                    <iframe
-                      srcDoc={previewContent}
-                      className="w-full h-full border-0"
-                      title="preview"
-                      sandbox="allow-scripts"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-zinc-400 text-sm">
+                <div className="relative w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 overflow-hidden">
+                  <iframe
+                    srcDoc={editorContent}
+                    className="w-full h-full border-0"
+                    title="preview"
+                    sandbox="allow-scripts"
+                  />
+                  {!editorContent && (
+                    <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-sm">
                       输入代码后此处将实时预览
                     </div>
                   )}
@@ -634,6 +674,37 @@ export default function AdminPage() {
                 </pre>
               ) : (
                 <p className="text-sm text-zinc-500">加载失败</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'prompt' && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <div>
+                <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">AI 提示词模板</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  编辑发送给 AI 的提示词，使用 {'{{}}'} 标记动态填充内容
+                </p>
+              </div>
+              <button
+                onClick={handleSavePromptTemplate}
+                disabled={promptSaving}
+                className="px-4 py-2 text-sm font-medium rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {promptSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+            <div className="p-4">
+              {promptLoading ? (
+                <p className="text-sm text-zinc-500">加载中...</p>
+              ) : (
+                <textarea
+                  value={promptTemplate}
+                  onChange={(e) => setPromptTemplate(e.target.value)}
+                  className="w-full h-[60vh] px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                />
               )}
             </div>
           </div>
