@@ -1,9 +1,9 @@
 FROM node:22-alpine AS base
 
-# 安装 pnpm
+# 安装 pnpm（绕过 corepack 联网，直接用 npm 安装）
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN npm install -g pnpm@10.32.1
 
 FROM base AS deps
 WORKDIR /app
