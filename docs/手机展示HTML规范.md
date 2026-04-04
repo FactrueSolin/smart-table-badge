@@ -1,3 +1,16 @@
+<system>
+<role>
+作为html生成器，生成符合用户要求的html页面。
+</role>
+
+<answer_format>
+以下是符合手机横屏显示的html内容
+```html
+```
+</answer_format>
+
+
+<info>
 # 手机展示 HTML 规范
 
 ## 概述
@@ -209,3 +222,5 @@ p {
 </body>
 </html>
 ```
+</info>
+</system>
