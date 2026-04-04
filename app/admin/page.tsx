@@ -67,6 +67,12 @@ export default function AdminPage() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const aiAbortRef = useRef<AbortController | null>(null);
+  const [aiThinking, setAiThinking] = useState('');
+  const [aiThinkingExpanded, setAiThinkingExpanded] = useState(false);
+
+  // 预览防闪烁：生成过程中延迟更新预览
+  const [previewContent, setPreviewContent] = useState('');
+  const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 规范内容
   const [guideContent, setGuideContent] = useState('');
@@ -76,6 +82,15 @@ export default function AdminPage() {
   const [copied, setCopied] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 清理预览定时器
+  useEffect(() => {
+    return () => {
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+      }
+    };
+  }, []);
 
   // 检查认证状态
   useEffect(() => {
@@ -229,8 +244,13 @@ export default function AdminPage() {
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setAiGenerating(true);
+    setAiThinking('');
+    setAiThinkingExpanded(false);
     const controller = new AbortController();
     aiAbortRef.current = controller;
+
+    let htmlAccum = '';
+    let thinkingAccum = '';
 
     try {
       const res = await fetch('/api/ai/generate', {
@@ -248,14 +268,39 @@ export default function AdminPage() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
         const text = decoder.decode(value, { stream: true });
-        accumulated += text;
-        setEditorContent(accumulated);
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (!line) continue;
+          if (line === 'D') continue; // 完成标记
+
+          const type = line[0];
+          const content = line.slice(2);
+
+          if (type === 'T') {
+            // 思考内容
+            thinkingAccum += content;
+            setAiThinking(thinkingAccum);
+          } else if (type === 'C') {
+            // HTML 代码
+            htmlAccum += content;
+            setEditorContent(htmlAccum);
+
+            // 防闪烁：延迟更新预览（500ms debounce）
+            if (previewTimerRef.current) {
+              clearTimeout(previewTimerRef.current);
+            }
+            previewTimerRef.current = setTimeout(() => {
+              setPreviewContent(htmlAccum);
+            }, 500);
+          }
+        }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -266,6 +311,12 @@ export default function AdminPage() {
     } finally {
       setAiGenerating(false);
       aiAbortRef.current = null;
+      // 生成完成，立即更新预览
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+        previewTimerRef.current = null;
+      }
+      setPreviewContent(htmlAccum);
     }
   };
 
@@ -502,28 +553,51 @@ export default function AdminPage() {
               </p>
             </div>
 
+            {/* AI 思考内容（可折叠） */}
+            {aiThinking && (
+              <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
+                <button
+                  onClick={() => setAiThinkingExpanded(!aiThinkingExpanded)}
+                  className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                >
+                  <svg className={`w-4 h-4 transition-transform ${aiThinkingExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  AI 思考中{aiGenerating ? '...' : '（已完成）'}
+                </button>
+                {aiThinkingExpanded && (
+                  <div className="mt-2 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+                    {aiThinking}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 左右分栏：编辑 + 预览 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-zinc-200 dark:divide-zinc-800">
               {/* 左侧：代码编辑 */}
               <div className="p-4">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">HTML 代码</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
+                  HTML 代码{aiGenerating && <span className="ml-2 text-violet-500 animate-pulse">AI 生成中...</span>}
+                </p>
                 <textarea
                   ref={textareaRef}
                   value={editorContent}
                   onChange={(e) => setEditorContent(e.target.value)}
                   placeholder="在此输入 HTML 代码..."
                   spellCheck={false}
-                  className="w-full h-[60vh] px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                  readOnly={aiGenerating}
+                  className="w-full h-[60vh] px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-zinc-100 font-mono text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all disabled:opacity-60"
                 />
               </div>
 
               {/* 右侧：实时预览 */}
               <div className="p-4">
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">实时预览</p>
-                <div className="w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white overflow-hidden">
-                  {editorContent ? (
+                <div className="w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 overflow-hidden">
+                  {previewContent ? (
                     <iframe
-                      srcDoc={editorContent}
+                      srcDoc={previewContent}
                       className="w-full h-full border-0"
                       title="preview"
                       sandbox="allow-scripts"

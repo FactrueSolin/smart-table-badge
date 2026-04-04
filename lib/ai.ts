@@ -44,6 +44,10 @@ ${currentHtml}
   return `用户需求：${prompt}`;
 }
 
+/**
+ * 流式调用 LLM，返回自定义协议的 ReadableStream
+ * 协议格式：每行一个消息，格式为 "T:内容"（思考）或 "C:内容"（代码）或 "D"（完成）
+ */
 export async function streamToLLM(
   config: AIConfig,
   systemPrompt: string,
@@ -63,6 +67,9 @@ export async function streamToLLM(
         { role: 'user', content: userMessage },
       ],
       stream: true,
+      stream_options: {
+        include_usage: false,
+      },
     }),
     signal,
   });
@@ -76,7 +83,7 @@ export async function streamToLLM(
     throw new Error('AI 响应体为空');
   }
 
-  // 解析 SSE 流，提取 content 字段，使用 start 主动 push 模式
+  // 解析 SSE 流，转换为自定义协议格式
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -90,6 +97,7 @@ export async function streamToLLM(
           while (true) {
             const { done, value } = await reader.read();
             if (done) {
+              controller.enqueue(encoder.encode('D\n'));
               controller.close();
               return;
             }
@@ -104,6 +112,7 @@ export async function streamToLLM(
 
               const data = trimmed.slice(6);
               if (data === '[DONE]') {
+                controller.enqueue(encoder.encode('D\n'));
                 controller.close();
                 return;
               }
@@ -113,12 +122,16 @@ export async function streamToLLM(
                   choices?: Array<{
                     delta?: {
                       content?: string;
+                      reasoning_content?: string;
                     };
                   }>;
                 };
-                const content = json.choices?.[0]?.delta?.content;
-                if (content) {
-                  controller.enqueue(encoder.encode(content));
+                const delta = json.choices?.[0]?.delta;
+                if (delta?.reasoning_content) {
+                  controller.enqueue(encoder.encode(`T:${delta.reasoning_content}\n`));
+                }
+                if (delta?.content) {
+                  controller.enqueue(encoder.encode(`C:${delta.content}\n`));
                 }
               } catch {
                 // 忽略解析错误
@@ -127,6 +140,7 @@ export async function streamToLLM(
           }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') {
+            controller.enqueue(encoder.encode('D\n'));
             controller.close();
           } else {
             controller.error(error);
