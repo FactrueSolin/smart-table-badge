@@ -559,12 +559,6 @@ export default function AdminPage() {
                     type="text"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && !aiGenerating) {
-                        e.preventDefault();
-                        handleAIGenerate();
-                      }
-                    }}
                     placeholder="用自然语言描述你想要的页面效果，AI 会自动生成 HTML"
                     disabled={aiGenerating}
                     className="w-full px-4 py-2.5 pr-24 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all text-sm disabled:opacity-50"
