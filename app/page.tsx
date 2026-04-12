@@ -12,6 +12,43 @@ export default function Home() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  const releaseWakeLock = useCallback(async () => {
+    const sentinel = wakeLockRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    wakeLockRef.current = null;
+    await sentinel.release().catch(() => {});
+  }, []);
+
+  const requestWakeLock = useCallback(async () => {
+    if (!document.fullscreenElement || document.visibilityState !== 'visible') {
+      return;
+    }
+
+    if (!('wakeLock' in navigator)) {
+      return;
+    }
+
+    if (wakeLockRef.current && !wakeLockRef.current.released) {
+      return;
+    }
+
+    try {
+      const sentinel = await navigator.wakeLock.request('screen');
+      wakeLockRef.current = sentinel;
+      sentinel.addEventListener('release', () => {
+        if (wakeLockRef.current === sentinel) {
+          wakeLockRef.current = null;
+        }
+      });
+    } catch {
+      wakeLockRef.current = null;
+    }
+  }, []);
 
   const connectSSE = useCallback(() => {
     if (eventSourceRef.current) {
@@ -22,7 +59,7 @@ export default function Home() {
     eventSourceRef.current = es;
 
     es.addEventListener('content-changed', () => {
-      setIframeSrc((prev) => {
+      setIframeSrc(() => {
         const url = new URL('/api/current/view', window.location.origin);
         url.searchParams.set('t', String(Date.now()));
         return url.toString();
@@ -52,8 +89,9 @@ export default function Home() {
 
     return () => {
       eventSourceRef.current?.close();
+      void releaseWakeLock();
     };
-  }, [connectSSE]);
+  }, [connectSSE, releaseWakeLock]);
 
   // 监听屏幕方向变化
   useEffect(() => {
@@ -79,7 +117,22 @@ export default function Home() {
   }, [isFullscreen]);
 
   useEffect(() => {
-    resetControlsTimer();
+    if (!isFullscreen) {
+      if (controlsTimerRef.current) {
+        clearTimeout(controlsTimerRef.current);
+      }
+
+      return () => {
+        if (controlsTimerRef.current) {
+          clearTimeout(controlsTimerRef.current);
+        }
+      };
+    }
+
+    controlsTimerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+
     return () => {
       if (controlsTimerRef.current) {
         clearTimeout(controlsTimerRef.current);
@@ -91,15 +144,14 @@ export default function Home() {
     try {
       if (!document.fullscreenElement) {
         await containerRef.current?.requestFullscreen();
-        setIsFullscreen(true);
         // 尝试锁定横屏（非标准 API，部分浏览器支持）
         const orientation = screen.orientation as { lock?: (type: string) => Promise<void> };
         if (orientation?.lock) {
           await orientation.lock('landscape').catch(() => {});
         }
       } else {
+        await releaseWakeLock();
         await document.exitFullscreen();
-        setIsFullscreen(false);
         if (screen.orientation?.unlock) {
           screen.orientation.unlock();
         }
@@ -107,15 +159,41 @@ export default function Home() {
     } catch {
       // 全屏 API 不可用时静默失败
     }
-  }, []);
+  }, [releaseWakeLock]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const fullscreenActive = !!document.fullscreenElement;
+      setIsFullscreen(fullscreenActive);
+      setShowControls(true);
+
+      if (fullscreenActive) {
+        void requestWakeLock();
+        return;
+      }
+
+      void releaseWakeLock();
     };
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+  }, [releaseWakeLock, requestWakeLock]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && document.fullscreenElement) {
+        void requestWakeLock();
+        return;
+      }
+
+      if (document.visibilityState !== 'visible') {
+        void releaseWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [releaseWakeLock, requestWakeLock]);
 
   if (loading) {
     return (
