@@ -5,6 +5,7 @@ import type { Config, PageInfo } from './types';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const PAGES_DIR = path.join(DATA_DIR, 'pages');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const DEFAULT_CONFIG_FILE = path.join(DATA_DIR, 'config.default.json');
 
 const DEFAULT_CONFIG: Config = {
   currentPageId: null,
@@ -22,7 +23,12 @@ export async function loadConfig(): Promise<Config> {
     const raw = await fs.readFile(CONFIG_FILE, 'utf-8');
     return JSON.parse(raw) as Config;
   } catch {
-    return DEFAULT_CONFIG;
+    try {
+      const raw = await fs.readFile(DEFAULT_CONFIG_FILE, 'utf-8');
+      return JSON.parse(raw) as Config;
+    } catch {
+      return DEFAULT_CONFIG;
+    }
   }
 }
 
