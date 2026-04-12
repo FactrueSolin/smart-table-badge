@@ -7,6 +7,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 ENV npm_config_registry="$NPM_REGISTRY"
 ENV PNPM_CONFIG_REGISTRY="$NPM_REGISTRY"
 RUN npm install -g pnpm@10.32.1
+RUN apk add --no-cache su-exec
 
 FROM base AS deps
 WORKDIR /app
@@ -37,10 +38,8 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --chown=nextjs:nodejs --from=builder /app/data ./data
 
-USER nextjs
-
 EXPOSE 3000
 
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "mkdir -p /app/data/pages && chown -R nextjs:nodejs /app/data && exec su-exec nextjs:nodejs node server.js"]
