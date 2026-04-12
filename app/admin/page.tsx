@@ -416,11 +416,10 @@ export default function AdminPage() {
                 <button
                   key={tab.key}
                   onClick={() => handleTabChange(tab.key)}
-                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                    activeTab === tab.key
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab.key
                       ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
                       : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -636,9 +635,9 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* 右侧：实时预览（与编辑器完全同步） */}
+              {/* 右侧：预览（与编辑器完全同步） */}
               <div className="p-4">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">实时预览</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">预览</p>
                 <div className="relative w-full h-[60vh] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-950 overflow-hidden">
                   <iframe
                     srcDoc={editorContent}
@@ -648,7 +647,7 @@ export default function AdminPage() {
                   />
                   {!editorContent && (
                     <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-sm">
-                      输入代码后此处将实时预览
+                      输入代码后此处将预览
                     </div>
                   )}
                 </div>
