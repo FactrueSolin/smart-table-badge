@@ -56,6 +56,32 @@ describe('API: /api/pages', () => {
       expect(data.id).toBe('new-id')
     })
 
+    it('存储失败时返回 500 并记录日志', async () => {
+      const { addPage } = await import('@/lib/storage')
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const storageError = new Error('EACCES: permission denied')
+
+      vi.mocked(addPage).mockRejectedValue(storageError)
+
+      const formData = new FormData()
+      formData.set('file', new Blob(['<html></html>'], { type: 'text/html' }), 'test.html')
+
+      const request = new NextRequest('http://localhost/api/pages', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const { POST } = await import('@/app/api/pages/route')
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(500)
+      expect(data.error).toBe('上传失败')
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[api/pages] upload failed', storageError)
+
+      consoleErrorSpy.mockRestore()
+    })
+
     it('缺少文件返回 400', async () => {
       const formData = new FormData()
       const request = new NextRequest('http://localhost/api/pages', {

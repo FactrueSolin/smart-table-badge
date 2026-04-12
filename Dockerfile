@@ -30,9 +30,12 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+RUN mkdir -p /app/data/pages && chown -R nextjs:nodejs /app/data
+
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --chown=nextjs:nodejs --from=builder /app/data ./data
 
 USER nextjs
 

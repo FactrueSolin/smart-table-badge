@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { loadConfig, addPage, deletePage } from '@/lib/storage';
+import { loadConfig, addPage } from '@/lib/storage';
 
 export async function GET() {
   const config = await loadConfig();
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     const page = await addPage(name, content);
     return NextResponse.json(page, { status: 201 });
   } catch (err) {
+    console.error('[api/pages] upload failed', err);
     return NextResponse.json({ error: '上传失败' }, { status: 500 });
   }
 }
