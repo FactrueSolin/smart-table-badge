@@ -1,8 +1,11 @@
 FROM node:22-alpine AS base
 
-# 安装 pnpm（绕过 corepack 联网，直接用 npm 安装）
+# 使用国内镜像源，避免 Docker 构建阶段访问默认 npm 源失败
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+ENV npm_config_registry="$NPM_REGISTRY"
+ENV PNPM_CONFIG_REGISTRY="$NPM_REGISTRY"
 RUN npm install -g pnpm@10.32.1
 
 FROM base AS deps

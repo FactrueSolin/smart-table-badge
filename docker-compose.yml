@@ -1,6 +1,9 @@
 services:
   htmlpush:
-    build: .
+    build:
+      context: .
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     ports:
       - "43210:3000"
     environment:
