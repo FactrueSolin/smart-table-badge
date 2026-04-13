@@ -45,3 +45,4 @@ next-env.d.ts
 !/data/config.default.json
 !/data/pages/
 !/data/pages/default-guide-page.html
+data/pages
