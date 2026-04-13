@@ -1,6 +1,16 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  ANTI_BURN_IDLE_MS,
+  ANTI_BURN_SHIFT_INTERVAL_MS,
+  ANTI_BURN_MAX_OFFSET_PX,
+  ANTI_BURN_DIM_OPACITY,
+  ANTI_BURN_POSITIONS,
+  getNextPositionIndex,
+  type AntiBurnMode,
+  DEFAULT_ANTI_BURN_MODE,
+} from '@/lib/anti-burn';
 
 export default function Home() {
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
@@ -9,10 +19,19 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
+  // 防烧屏状态
+  const [antiBurnActive, setAntiBurnActive] = useState(false);
+  const [antiBurnStepIndex, setAntiBurnStepIndex] = useState(0);
+  const [antiBurnDimOpacity, setAntiBurnDimOpacity] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // 防烧屏 refs
+  const antiBurnIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const antiBurnShiftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const antiBurnDimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const antiBurnModeRef = useRef<AntiBurnMode>(DEFAULT_ANTI_BURN_MODE);
 
   const releaseWakeLock = useCallback(async () => {
     const sentinel = wakeLockRef.current;
@@ -93,6 +112,89 @@ export default function Home() {
     };
   }, [connectSSE, releaseWakeLock]);
 
+  // 防烧屏：停止所有定时器
+  const stopAntiBurnTimers = useCallback(() => {
+    if (antiBurnIdleTimerRef.current) {
+      clearTimeout(antiBurnIdleTimerRef.current);
+      antiBurnIdleTimerRef.current = null;
+    }
+    if (antiBurnShiftTimerRef.current) {
+      clearTimeout(antiBurnShiftTimerRef.current);
+      antiBurnShiftTimerRef.current = null;
+    }
+    if (antiBurnDimTimerRef.current) {
+      clearTimeout(antiBurnDimTimerRef.current);
+      antiBurnDimTimerRef.current = null;
+    }
+  }, []);
+
+  // 防烧屏：执行一次漂移（使用 ref 避免循环依赖）
+  const scheduleNextShiftRef = useRef<(() => void) | null>(null);
+  const scheduleNextShift = useCallback(() => {
+    if (antiBurnShiftTimerRef.current) {
+      clearTimeout(antiBurnShiftTimerRef.current);
+    }
+    antiBurnShiftTimerRef.current = setTimeout(() => {
+      setAntiBurnStepIndex((prev) => getNextPositionIndex(prev));
+      // 如果启用了 dim 模式，同时更新透明度
+      if (antiBurnModeRef.current === 'shift-plus-dim') {
+        setAntiBurnDimOpacity((prev) => {
+          const next = prev + ANTI_BURN_DIM_OPACITY;
+          return next > ANTI_BURN_DIM_OPACITY * 2 ? 0 : next;
+        });
+      }
+      // 通过 ref 调用自身，避免循环依赖
+      scheduleNextShiftRef.current?.();
+    }, ANTI_BURN_SHIFT_INTERVAL_MS);
+  }, []);
+
+  useEffect(() => {
+    scheduleNextShiftRef.current = scheduleNextShift;
+  }, [scheduleNextShift]);
+
+  // 防烧屏：启动空闲检测
+  const startAntiBurnIdleTimer = useCallback(() => {
+    stopAntiBurnTimers();
+    antiBurnIdleTimerRef.current = setTimeout(() => {
+      setAntiBurnActive(true);
+      setAntiBurnStepIndex(0);
+      scheduleNextShift();
+    }, ANTI_BURN_IDLE_MS);
+  }, [scheduleNextShift, stopAntiBurnTimers]);
+
+  // 防烧屏：完整重置（停止 + 重置状态）
+  const resetAntiBurn = useCallback(() => {
+    stopAntiBurnTimers();
+    // 使用 requestAnimationFrame 延迟 setState，避免 cascading renders
+    requestAnimationFrame(() => {
+      setAntiBurnActive(false);
+      setAntiBurnStepIndex(0);
+      setAntiBurnDimOpacity(0);
+    });
+  }, [stopAntiBurnTimers]);
+
+  // 监听全屏状态变化，启动或停止防烧屏
+  useEffect(() => {
+    if (isFullscreen) {
+      startAntiBurnIdleTimer();
+    } else {
+      stopAntiBurnTimers();
+      resetAntiBurn();
+    }
+  }, [isFullscreen, resetAntiBurn, startAntiBurnIdleTimer, stopAntiBurnTimers]);
+
+  // SSE 内容刷新时重置防烧屏
+  useEffect(() => {
+    resetAntiBurn();
+  }, [iframeSrc, resetAntiBurn]);
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      stopAntiBurnTimers();
+    };
+  }, [stopAntiBurnTimers]);
+
   // 监听屏幕方向变化
   useEffect(() => {
     const checkOrientation = () => {
@@ -103,7 +205,15 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkOrientation);
   }, []);
 
-  // 自动隐藏控制栏
+  // 用户交互时重置防烧屏（在 resetControlsTimer 中调用）
+  const resetAntiBurnOnInteraction = useCallback(() => {
+    resetAntiBurn();
+    if (isFullscreen) {
+      startAntiBurnIdleTimer();
+    }
+  }, [isFullscreen, resetAntiBurn, startAntiBurnIdleTimer]);
+
+  // 自动隐藏控制栏 + 重置防烧屏
   const resetControlsTimer = useCallback(() => {
     setShowControls(true);
     if (controlsTimerRef.current) {
@@ -114,7 +224,9 @@ export default function Home() {
         setShowControls(false);
       }, 3000);
     }
-  }, [isFullscreen]);
+    // 用户交互时重置防烧屏空闲计时
+    resetAntiBurnOnInteraction();
+  }, [isFullscreen, resetAntiBurnOnInteraction]);
 
   useEffect(() => {
     if (!isFullscreen) {
@@ -219,6 +331,12 @@ export default function Home() {
     );
   }
 
+  // 计算当前漂移偏移量
+  const currentPosition = ANTI_BURN_POSITIONS[antiBurnStepIndex];
+  const transformStyle = antiBurnActive
+    ? `translate(${currentPosition.x * ANTI_BURN_MAX_OFFSET_PX}px, ${currentPosition.y * ANTI_BURN_MAX_OFFSET_PX}px)`
+    : 'none';
+
   return (
     <div
       ref={containerRef}
@@ -226,16 +344,38 @@ export default function Home() {
       onClick={resetControlsTimer}
       onTouchStart={resetControlsTimer}
     >
-      <iframe
-        src={iframeSrc}
-        className="w-full h-full border-0"
-        title="display"
-        allowFullScreen
-      />
+      {/* displaySurface：防烧屏微漂移层 */}
+      <div
+        className="absolute inset-0"
+        style={{
+          transform: transformStyle,
+          width: 'calc(100% + 8px)',
+          height: 'calc(100% + 8px)',
+          marginLeft: '-4px',
+          marginTop: '-4px',
+          transition: 'transform 1s ease-in-out',
+        }}
+      >
+        <iframe
+          src={iframeSrc}
+          className="w-full h-full border-0"
+          title="display"
+          allowFullScreen
+        />
+
+        {/* 防烧屏亮度呼吸遮罩 */}
+        <div
+          className="absolute inset-0 pointer-events-none bg-black"
+          style={{
+            opacity: antiBurnDimOpacity,
+            transition: 'opacity 2s ease-in-out',
+          }}
+        />
+      </div>
 
       {/* 控制栏 */}
       <div
-        className={`absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/60 to-transparent transition-opacity duration-300 ${
+        className={`absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/60 to-transparent transition-opacity duration-300 ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
