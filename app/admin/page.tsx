@@ -57,6 +57,9 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('pages');
 
+  // 图片上传状态
+  const [imageUploading, setImageUploading] = useState(false);
+
   // 编辑器状态
   const [editorName, setEditorName] = useState('');
   const [editorContent, setEditorContent] = useState('');
@@ -158,6 +161,32 @@ export default function AdminPage() {
     setEditorContent(content);
     setEditingPageId(null);
     setActiveTab('editor');
+  };
+
+  // 处理图片上传
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', file.name.replace(/\.[^.]+$/, ''));
+
+      const res = await fetch('/api/images', { method: 'POST', body: formData });
+      if (res.ok) {
+        await fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || '图片上传失败');
+      }
+    } catch {
+      alert('图片上传失败');
+    } finally {
+      setImageUploading(false);
+      e.target.value = '';
+    }
   };
 
   // 加载页面内容进行编辑
@@ -440,23 +469,45 @@ export default function AdminPage() {
           <div className="space-y-6">
             {/* 上传区域 */}
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100 mb-4">上传 HTML 文件</h2>
-              <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors">
-                <div className="text-center">
-                  <svg className="mx-auto h-8 w-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                    点击选择或拖拽 HTML 文件
-                  </p>
-                </div>
-                <input
-                  type="file"
-                  accept=".html,.htm"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
+              <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100 mb-4">上传文件</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* HTML 上传 */}
+                <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors">
+                  <div className="text-center">
+                    <svg className="mx-auto h-8 w-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      上传 HTML 文件
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".html,.htm"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* 图片上传 */}
+                <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors">
+                  <div className="text-center">
+                    <svg className="mx-auto h-8 w-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      {imageUploading ? '上传中...' : '上传图片并生成页面'}
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif"
+                    onChange={handleImageUpload}
+                    disabled={imageUploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
             {/* 页面列表 */}
@@ -525,7 +576,7 @@ export default function AdminPage() {
                 </h2>
                 {editingPageId && (
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    编辑完成后点击"保存"更新页面
+                    编辑完成后点击保存更新页面
                   </span>
                 )}
               </div>

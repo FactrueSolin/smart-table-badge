@@ -10,7 +10,7 @@ async function createStorage() {
   const PAGES_DIR = path.join(DATA_DIR, 'pages')
   const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 
-  const DEFAULT_CONFIG = { currentPageId: null as string | null, pages: [] as import('@/lib/types').PageInfo[] }
+  const DEFAULT_CONFIG: import('@/lib/types').Config = { currentPageId: null, pages: [], images: [] }
 
   async function ensureDirs() {
     await fs.mkdir(DATA_DIR, { recursive: true })
@@ -23,7 +23,7 @@ async function createStorage() {
       const raw = await fs.readFile(CONFIG_FILE, 'utf-8')
       return JSON.parse(raw) as import('@/lib/types').Config
     } catch {
-      return { ...DEFAULT_CONFIG, pages: [] }
+      return { ...DEFAULT_CONFIG }
     }
   }
 
@@ -38,6 +38,7 @@ async function createStorage() {
     const filename = `${id}.html`
     const pageInfo: import('@/lib/types').PageInfo = { id, name, filename, uploadedAt: new Date().toISOString() }
     await fs.writeFile(path.join(PAGES_DIR, filename), content, 'utf-8')
+    if (!config.images) { config.images = []; }
     config.pages.push(pageInfo)
     if (!config.currentPageId) {
       config.currentPageId = id
@@ -113,14 +114,15 @@ describe('storage', () => {
   it('loadConfig 目录不存在时返回默认配置', async () => {
     storage = await createStorage()
     const config = await storage.loadConfig()
-    expect(config).toEqual({ currentPageId: null, pages: [] })
+    expect(config).toEqual({ currentPageId: null, pages: [], images: [] })
   })
 
   it('saveConfig 写入后可被 loadConfig 读取', async () => {
     storage = await createStorage()
-    const newConfig = {
+    const newConfig: import('@/lib/types').Config = {
       currentPageId: 'test-id',
       pages: [{ id: 'test-id', name: 'test', filename: 'test.html', uploadedAt: '2024-01-01T00:00:00.000Z' }],
+      images: [],
     }
     await storage.saveConfig(newConfig)
     const loaded = await storage.loadConfig()

@@ -18,6 +18,7 @@ describe('API: /api/pages', () => {
         pages: [
           { id: '1', name: 'page1', filename: '1.html', uploadedAt: '2024-01-01' },
         ],
+        images: [],
       })
 
       const { GET } = await import('@/app/api/pages/route')
