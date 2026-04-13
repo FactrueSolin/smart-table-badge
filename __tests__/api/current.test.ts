@@ -1,13 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/storage')
 vi.mock('@/lib/sse')
+vi.mock('@/lib/auth')
 
 describe('API: /api/current', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   describe('GET /api/current', () => {
@@ -41,7 +46,10 @@ describe('API: /api/current', () => {
   })
 
   describe('PUT /api/current', () => {
-    it('切换成功返回 200', async () => {
+    it('Cookie 鉴权成功切换页面返回 200', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
       const { setCurrentPage } = await import('@/lib/storage')
       vi.mocked(setCurrentPage).mockResolvedValue(true)
 
@@ -56,9 +64,54 @@ describe('API: /api/current', () => {
 
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
+      expect(data.pageId).toBe('1')
+    })
+
+    it('Bearer Token 鉴权成功切换页面返回 200', async () => {
+      const { isAuthenticated, isValidCurrentPageApiToken } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(false)
+      vi.mocked(isValidCurrentPageApiToken).mockReturnValue(true)
+
+      const { setCurrentPage } = await import('@/lib/storage')
+      vi.mocked(setCurrentPage).mockResolvedValue(true)
+
+      const request = new NextRequest('http://localhost/api/current', {
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer test-token',
+        },
+        body: JSON.stringify({ pageId: '1' }),
+      })
+
+      const { PUT } = await import('@/app/api/current/route')
+      const response = await PUT(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.success).toBe(true)
+      expect(data.pageId).toBe('1')
+    })
+
+    it('未授权返回 401', async () => {
+      const { isAuthenticated, isValidCurrentPageApiToken } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(false)
+      vi.mocked(isValidCurrentPageApiToken).mockReturnValue(false)
+
+      const request = new NextRequest('http://localhost/api/current', {
+        method: 'PUT',
+        body: JSON.stringify({ pageId: '1' }),
+      })
+
+      const { PUT } = await import('@/app/api/current/route')
+      const response = await PUT(request)
+
+      expect(response.status).toBe(401)
     })
 
     it('缺少 pageId 返回 400', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
       const request = new NextRequest('http://localhost/api/current', {
         method: 'PUT',
         body: JSON.stringify({}),
@@ -71,6 +124,9 @@ describe('API: /api/current', () => {
     })
 
     it('页面不存在返回 404', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
       const { setCurrentPage } = await import('@/lib/storage')
       vi.mocked(setCurrentPage).mockResolvedValue(false)
 

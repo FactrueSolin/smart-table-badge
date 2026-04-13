@@ -47,3 +47,15 @@ export function getAdminPassword(): string {
   }
   return pwd;
 }
+
+export function isValidCurrentPageApiToken(token: string): boolean {
+  const expected = process.env.CURRENT_PAGE_API_TOKEN;
+  if (!expected) {
+    return false;
+  }
+  try {
+    return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
