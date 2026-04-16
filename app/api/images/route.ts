@@ -142,10 +142,10 @@ export const registerImagesCollectionOpenApi = createOpenApiRouteRegistrar((regi
 
 registerImagesCollectionOpenApi();
 
-function getImageUrls(origin: string, imageId: string, pageId: string | null) {
+function getImageUrls(imageId: string, pageId: string | null) {
   return {
-    imageUrl: `${origin}/api/images/${imageId}`,
-    pageUrl: pageId ? `${origin}/api/pages/${pageId}` : null,
+    imageUrl: `/api/images/${imageId}`,
+    pageUrl: pageId ? `/api/pages/${pageId}` : null,
   };
 }
 
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(
     images.map((image) => ({
       ...image,
-      ...getImageUrls(request.nextUrl.origin, image.id, image.pageId),
+      ...getImageUrls(image.id, image.pageId),
     })),
   );
 }
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       image: {
         ...image,
-        ...getImageUrls(request.nextUrl.origin, image.id, image.pageId),
+        ...getImageUrls(image.id, image.pageId),
       },
       page,
     }, { status: 201 });

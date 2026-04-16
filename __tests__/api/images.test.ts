@@ -32,8 +32,8 @@ describe('API: /api/images', () => {
 
       expect(response.status).toBe(200)
       expect(vi.mocked(listImages)).toHaveBeenCalledWith('desc')
-      expect(data[0].imageUrl).toBe('http://localhost/api/images/img-1')
-      expect(data[0].pageUrl).toBe('http://localhost/api/pages/page-1')
+      expect(data[0].imageUrl).toBe('/api/images/img-1')
+      expect(data[0].pageUrl).toBe('/api/pages/page-1')
     })
   })
 
@@ -74,7 +74,7 @@ describe('API: /api/images', () => {
 
       expect(response.status).toBe(201)
       expect(data.image.name).toBe('封面')
-      expect(data.image.imageUrl).toBe('http://localhost/api/images/img-1')
+      expect(data.image.imageUrl).toBe('/api/images/img-1')
     })
 
     it('格式不支持时返回 415', async () => {
@@ -145,6 +145,8 @@ describe('API: /api/images/[id]', () => {
 
     expect(response.status).toBe(200)
     expect(data.name).toBe('新名称')
+    expect(data.imageUrl).toBe('/api/images/img-1')
+    expect(data.pageUrl).toBe('/api/pages/page-1')
   })
 
   it('DELETE 删除单张图片', async () => {

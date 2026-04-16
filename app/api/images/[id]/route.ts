@@ -161,8 +161,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({
       ...image,
-      imageUrl: `${request.nextUrl.origin}/api/images/${image.id}`,
-      pageUrl: image.pageId ? `${request.nextUrl.origin}/api/pages/${image.pageId}` : null,
+      imageUrl: `/api/images/${image.id}`,
+      pageUrl: image.pageId ? `/api/pages/${image.pageId}` : null,
     });
   } catch (err) {
     console.error('[api/images/:id] rename failed', err);

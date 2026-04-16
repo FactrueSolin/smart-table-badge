@@ -23,6 +23,18 @@ interface ImageAsset {
   pageUrl: string | null;
 }
 
+function toAbsoluteUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
+
+  if (typeof window === 'undefined') {
+    return path;
+  }
+
+  return new URL(path, window.location.origin).toString()
+}
+
 type ImageSort = 'uploadedAt-desc' | 'uploadedAt-asc';
 
 type Tab = 'pages' | 'images' | 'editor' | 'guide' | 'api' | 'prompt';
@@ -313,7 +325,7 @@ export default function AdminPage() {
   };
 
   const handleCopyText = async (content: string) => {
-    await navigator.clipboard.writeText(content);
+    await navigator.clipboard.writeText(toAbsoluteUrl(content));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
