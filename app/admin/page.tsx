@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface PageInfo {
@@ -9,7 +10,22 @@ interface PageInfo {
   uploadedAt: string;
 }
 
-type Tab = 'pages' | 'editor' | 'guide' | 'api' | 'prompt';
+interface ImageAsset {
+  id: string;
+  name: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  updatedAt: string;
+  pageId: string | null;
+  imageUrl: string;
+  pageUrl: string | null;
+}
+
+type ImageSort = 'uploadedAt-desc' | 'uploadedAt-asc';
+
+type Tab = 'pages' | 'images' | 'editor' | 'guide' | 'api' | 'prompt';
 
 const apiDocMarkdown = `# HTMLPush API 文档
 
@@ -52,10 +68,14 @@ data: {"pageId": "xxx", "timestamp": 1234567890}
 
 export default function AdminPage() {
   const [pages, setPages] = useState<PageInfo[]>([]);
+  const [images, setImages] = useState<ImageAsset[]>([]);
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('pages');
+  const [imageSort, setImageSort] = useState<ImageSort>('uploadedAt-desc');
+  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const [imageActionLoading, setImageActionLoading] = useState(false);
 
   // 图片上传状态
   const [imageUploading, setImageUploading] = useState(false);
@@ -96,7 +116,6 @@ export default function AdminPage() {
       .then((data) => {
         if (data.authenticated) {
           setAuthenticated(true);
-          fetchData();
         } else {
           setAuthenticated(false);
           window.location.href = '/admin/login';
@@ -137,20 +156,29 @@ export default function AdminPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [pagesRes, currentRes] = await Promise.all([
+      const [pagesRes, currentRes, imagesRes] = await Promise.all([
         fetch('/api/pages'),
         fetch('/api/current'),
+        fetch(`/api/images?sort=${imageSort}`),
       ]);
       const pagesData = await pagesRes.json();
       const currentData = await currentRes.json();
+      const imagesData = await imagesRes.json();
       setPages(pagesData);
       setCurrentPageId(currentData.page?.id ?? null);
+      setImages(Array.isArray(imagesData) ? imagesData : []);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [imageSort]);
+
+  useEffect(() => {
+    if (authenticated) {
+      void fetchData();
+    }
+  }, [authenticated, fetchData]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -268,6 +296,104 @@ export default function AdminPage() {
       setEditingPageId(null);
     }
     setActiveTab(tab);
+  };
+
+  const handleToggleImageSelection = (id: string) => {
+    setSelectedImageIds((prev) => (
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
+    ));
+  };
+
+  const handleToggleAllImages = () => {
+    setSelectedImageIds((prev) => (
+      prev.length === images.length ? [] : images.map((image) => image.id)
+    ));
+  };
+
+  const handleCopyText = async (content: string) => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleRenameImage = async (image: ImageAsset) => {
+    const nextName = window.prompt('请输入新的图片名称', image.name)?.trim();
+
+    if (!nextName || nextName === image.name) {
+      return;
+    }
+
+    setImageActionLoading(true);
+
+    try {
+      const response = await fetch(`/api/images/${image.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nextName }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || '重命名失败');
+        return;
+      }
+
+      await fetchData();
+    } finally {
+      setImageActionLoading(false);
+    }
+  };
+
+  const handleDeleteImage = async (image: ImageAsset) => {
+    if (!confirm(`确定删除图片“${image.name}”吗？`)) return;
+
+    setImageActionLoading(true);
+
+    try {
+      const response = await fetch(`/api/images/${image.id}`, { method: 'DELETE' });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || '删除失败');
+        return;
+      }
+
+      setSelectedImageIds((prev) => prev.filter((item) => item !== image.id));
+      await fetchData();
+    } finally {
+      setImageActionLoading(false);
+    }
+  };
+
+  const handleBatchDeleteImages = async () => {
+    if (selectedImageIds.length === 0) {
+      return;
+    }
+
+    if (!confirm(`确定批量删除选中的 ${selectedImageIds.length} 张图片吗？`)) return;
+
+    setImageActionLoading(true);
+
+    try {
+      const response = await fetch('/api/images', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedImageIds }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || '批量删除失败');
+        return;
+      }
+
+      setSelectedImageIds([]);
+      await fetchData();
+    } finally {
+      setImageActionLoading(false);
+    }
   };
 
   const handleSavePromptTemplate = async () => {
@@ -427,11 +553,14 @@ export default function AdminPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'pages', label: '页面管理' },
+    { key: 'images', label: '图床管理' },
     { key: 'editor', label: '代码编辑' },
     { key: 'prompt', label: '提示词' },
     { key: 'guide', label: 'HTML 规范' },
     { key: 'api', label: 'API 文档' },
   ];
+
+  const allImagesSelected = images.length > 0 && selectedImageIds.length === images.length;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors">
@@ -562,6 +691,153 @@ export default function AdminPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'images' && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">图床管理</h2>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    管理图片索引、直链、展示页以及批量删除。
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={imageSort}
+                    onChange={(e) => setImageSort(e.target.value as ImageSort)}
+                    className="px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+                  >
+                    <option value="uploadedAt-desc">最新上传</option>
+                    <option value="uploadedAt-asc">最早上传</option>
+                  </select>
+                  <button
+                    onClick={handleBatchDeleteImages}
+                    disabled={selectedImageIds.length === 0 || imageActionLoading}
+                    className="px-4 py-2 text-sm font-medium rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    删除选中 {selectedImageIds.length > 0 ? `(${selectedImageIds.length})` : ''}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+              {images.length === 0 ? (
+                <p className="p-6 text-sm text-zinc-500 dark:text-zinc-400">暂无图片，请先上传图片。</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-zinc-50 dark:bg-zinc-950/40 border-b border-zinc-200 dark:border-zinc-800">
+                      <tr>
+                        <th className="px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            checked={allImagesSelected}
+                            onChange={handleToggleAllImages}
+                            className="h-4 w-4 rounded border-zinc-300"
+                          />
+                        </th>
+                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">预览</th>
+                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">名称</th>
+                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">格式 / 大小</th>
+                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">上传时间</th>
+                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {images.map((image) => (
+                        <tr key={image.id} className="align-top">
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedImageIds.includes(image.id)}
+                              onChange={() => handleToggleImageSelection(image.id)}
+                              className="h-4 w-4 rounded border-zinc-300"
+                            />
+                          </td>
+                          <td className="px-4 py-4">
+                            <Image
+                              src={image.imageUrl}
+                              alt={image.name}
+                              width={64}
+                              height={64}
+                              unoptimized
+                              className="h-16 w-16 rounded-xl object-cover border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800"
+                            />
+                          </td>
+                          <td className="px-4 py-4 min-w-52">
+                            <p className="font-medium text-zinc-900 dark:text-zinc-100">{image.name}</p>
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">ID: {image.id}</p>
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">{image.filename}</p>
+                          </td>
+                          <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
+                            <p>{image.mimeType}</p>
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{(image.size / 1024).toFixed(1)} KB</p>
+                          </td>
+                          <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
+                            <p>{new Date(image.uploadedAt).toLocaleString('zh-CN')}</p>
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">更新于 {new Date(image.updatedAt).toLocaleString('zh-CN')}</p>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleCopyText(image.imageUrl)}
+                                className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                              >
+                                {copied ? '已复制' : '复制直链'}
+                              </button>
+                              {image.pageUrl && (
+                                <button
+                                  onClick={() => handleCopyText(image.pageUrl ?? '')}
+                                  className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                  {copied ? '已复制' : '复制展示页'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRenameImage(image)}
+                                disabled={imageActionLoading}
+                                className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-full hover:bg-violet-500/20 disabled:opacity-50 transition-colors"
+                              >
+                                重命名
+                              </button>
+                              {image.pageUrl && (
+                                <a
+                                  href={image.pageUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-500/20 transition-colors"
+                                >
+                                  查看展示页
+                                </a>
+                              )}
+                              <a
+                                href={image.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                              >
+                                原图
+                              </a>
+                              <button
+                                onClick={() => handleDeleteImage(image)}
+                                disabled={imageActionLoading}
+                                className="px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 rounded-full hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

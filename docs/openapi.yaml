@@ -11,6 +11,8 @@ servers:
 tags:
   - name: 页面管理
     description: HTML 页面的增删改查
+  - name: 图床管理
+    description: 图片素材的上传、列表、重命名、删除与原图访问
   - name: 展示控制
     description: 当前展示页面的切换
   - name: 实时推送
@@ -19,6 +21,179 @@ tags:
     description: 管理后台认证
 
 paths:
+  /api/images:
+    get:
+      tags: [图床管理]
+      summary: 获取图片列表
+      parameters:
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [uploadedAt-desc, uploadedAt-asc]
+            default: uploadedAt-desc
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageAsset'
+    post:
+      tags: [图床管理]
+      summary: 上传图片并生成展示页
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  description: 图片名称
+              required: [file]
+      responses:
+        '201':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageUploadResponse'
+        '400':
+          description: 缺少文件
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: 文件过大
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: 文件类型不支持
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [图床管理]
+      summary: 批量删除图片
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageBatchDeleteRequest'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deletedIds:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/images/{id}:
+    get:
+      tags: [图床管理]
+      summary: 获取原始图片内容
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 图片不存在
+    patch:
+      tags: [图床管理]
+      summary: 重命名图片
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageRenameRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageAsset'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 图片不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [图床管理]
+      summary: 删除单张图片
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  id:
+                    type: string
+        '404':
+          description: 图片不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/pages:
     get:
       tags: [页面管理]
@@ -214,3 +389,56 @@ components:
           type: string
           format: date-time
           description: 上传时间
+    ImageAsset:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+        uploadedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        pageId:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+        pageUrl:
+          type: string
+          nullable: true
+    ImageUploadResponse:
+      type: object
+      properties:
+        image:
+          $ref: '#/components/schemas/ImageAsset'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    ImageRenameRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+    ImageBatchDeleteRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+      required: [ids]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

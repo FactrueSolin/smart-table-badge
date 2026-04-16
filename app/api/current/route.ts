@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentPageContent, setCurrentPage, loadConfig } from '@/lib/storage';
+import { getCurrentPageContent, setCurrentPage } from '@/lib/storage';
 import { broadcast } from '@/lib/sse';
 import { isAuthenticated, isValidCurrentPageApiToken } from '@/lib/auth';
 

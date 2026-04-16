@@ -8,28 +8,50 @@ async function createStorage() {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'htmlpush-storage-'))
   const DATA_DIR = path.join(tempDir, 'data')
   const PAGES_DIR = path.join(DATA_DIR, 'pages')
+  const IMAGES_DIR = path.join(DATA_DIR, 'images')
   const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
+  const IMAGES_INDEX_FILE = path.join(DATA_DIR, 'images.json')
 
   const DEFAULT_CONFIG: import('@/lib/types').Config = { currentPageId: null, pages: [], images: [] }
+  const DEFAULT_IMAGE_INDEX: import('@/lib/types').ImageIndex = { images: [] }
 
   async function ensureDirs() {
     await fs.mkdir(DATA_DIR, { recursive: true })
     await fs.mkdir(PAGES_DIR, { recursive: true })
+    await fs.mkdir(IMAGES_DIR, { recursive: true })
+  }
+
+  async function loadImageIndex() {
+    await ensureDirs()
+    try {
+      const raw = await fs.readFile(IMAGES_INDEX_FILE, 'utf-8')
+      return JSON.parse(raw) as import('@/lib/types').ImageIndex
+    } catch {
+      return { ...DEFAULT_IMAGE_INDEX }
+    }
+  }
+
+  async function saveImageIndex(index: import('@/lib/types').ImageIndex) {
+    await ensureDirs()
+    await fs.writeFile(IMAGES_INDEX_FILE, JSON.stringify(index, null, 2), 'utf-8')
   }
 
   async function loadConfig() {
     await ensureDirs()
+    const imageIndex = await loadImageIndex()
     try {
       const raw = await fs.readFile(CONFIG_FILE, 'utf-8')
-      return JSON.parse(raw) as import('@/lib/types').Config
+      const config = JSON.parse(raw) as import('@/lib/types').Config
+      return { ...config, images: imageIndex.images }
     } catch {
-      return { ...DEFAULT_CONFIG }
+      return { ...DEFAULT_CONFIG, images: imageIndex.images }
     }
   }
 
   async function saveConfig(config: import('@/lib/types').Config) {
     await ensureDirs()
-    await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8')
+    await fs.writeFile(CONFIG_FILE, JSON.stringify({ currentPageId: config.currentPageId, pages: config.pages }, null, 2), 'utf-8')
+    await saveImageIndex({ images: config.images })
   }
 
   async function addPage(name: string, content: string) {
@@ -95,9 +117,57 @@ async function createStorage() {
     }
   }
 
+  async function addImage(name: string, content: Buffer, mimeType: string) {
+    await ensureDirs()
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const ext = mimeType.split('/')[1] || 'png'
+    const filename = `${id}.${ext}`
+    await fs.writeFile(path.join(IMAGES_DIR, filename), content)
+    const page = await addPage(name, `<img src="/api/images/${id}" />`)
+    const now = new Date().toISOString()
+    const index = await loadImageIndex()
+    const image: import('@/lib/types').ImageAsset = {
+      id,
+      name,
+      filename,
+      mimeType,
+      size: content.byteLength,
+      uploadedAt: now,
+      updatedAt: now,
+      pageId: page.id,
+    }
+    index.images.push(image)
+    await saveImageIndex(index)
+    return { image, page }
+  }
+
+  async function renameImageAsset(id: string, name: string) {
+    const index = await loadImageIndex()
+    const image = index.images.find((item) => item.id === id)
+    if (!image) return null
+    image.name = name
+    image.updatedAt = new Date().toISOString()
+    await saveImageIndex(index)
+    return image
+  }
+
+  async function deleteImageAsset(id: string) {
+    const index = await loadImageIndex()
+    const target = index.images.find((item) => item.id === id)
+    if (!target) return false
+    index.images = index.images.filter((item) => item.id !== id)
+    await saveImageIndex(index)
+    await fs.rm(path.join(IMAGES_DIR, target.filename), { force: true })
+    if (target.pageId) {
+      await deletePage(target.pageId)
+    }
+    return true
+  }
+
   return {
     loadConfig, saveConfig, addPage, deletePage, setCurrentPage,
     getPageContent, getCurrentPageContent,
+    loadImageIndex, saveImageIndex, addImage, renameImageAsset, deleteImageAsset,
     _cleanup: async () => { await fs.rm(tempDir, { recursive: true, force: true }) },
   }
 }
@@ -215,5 +285,36 @@ describe('storage', () => {
     const result = await storage.getCurrentPageContent()
     expect(result.page).toBeNull()
     expect(result.content).toBeNull()
+  })
+
+  it('addImage 写入图片索引并绑定展示页', async () => {
+    storage = await createStorage()
+    const { image, page } = await storage.addImage('海报', Buffer.from('image'), 'image/png')
+    const index = await storage.loadImageIndex()
+
+    expect(index.images).toHaveLength(1)
+    expect(index.images[0].name).toBe('海报')
+    expect(index.images[0].pageId).toBe(page.id)
+    expect(image.size).toBe(5)
+  })
+
+  it('renameImageAsset 更新名称', async () => {
+    storage = await createStorage()
+    const { image } = await storage.addImage('旧名称', Buffer.from('image'), 'image/png')
+    const renamed = await storage.renameImageAsset(image.id, '新名称')
+
+    expect(renamed?.name).toBe('新名称')
+  })
+
+  it('deleteImageAsset 删除图片及关联页面', async () => {
+    storage = await createStorage()
+    const { image, page } = await storage.addImage('待删', Buffer.from('image'), 'image/png')
+    const deleted = await storage.deleteImageAsset(image.id)
+    const config = await storage.loadConfig()
+    const index = await storage.loadImageIndex()
+
+    expect(deleted).toBe(true)
+    expect(index.images).toHaveLength(0)
+    expect(config.pages.find((item) => item.id === page.id)).toBeUndefined()
   })
 })

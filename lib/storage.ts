@@ -1,12 +1,13 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Config, PageInfo, ImageAsset } from './types';
+import type { Config, ImageAsset, ImageIndex, PageInfo } from './types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const PAGES_DIR = path.join(DATA_DIR, 'pages');
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DEFAULT_CONFIG_FILE = path.join(DATA_DIR, 'config.default.json');
+const IMAGES_INDEX_FILE = path.join(DATA_DIR, 'images.json');
 
 const DEFAULT_CONFIG: Config = {
   currentPageId: null,
@@ -20,8 +21,31 @@ async function ensureDirs() {
   await fs.mkdir(IMAGES_DIR, { recursive: true });
 }
 
-export async function loadConfig(): Promise<Config> {
-  await ensureDirs();
+function normalizeImageAsset(image: Partial<ImageAsset>): ImageAsset {
+  const uploadedAt = typeof image.uploadedAt === 'string' ? image.uploadedAt : new Date().toISOString();
+
+  return {
+    id: typeof image.id === 'string' ? image.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: typeof image.name === 'string' && image.name.trim() ? image.name : '未命名图片',
+    filename: typeof image.filename === 'string' ? image.filename : '',
+    mimeType: typeof image.mimeType === 'string' ? image.mimeType : 'image/jpeg',
+    size: typeof image.size === 'number' ? image.size : 0,
+    uploadedAt,
+    updatedAt: typeof image.updatedAt === 'string' ? image.updatedAt : uploadedAt,
+    pageId: typeof image.pageId === 'string' ? image.pageId : null,
+  };
+}
+
+function sortImagesByUploadedAt(images: ImageAsset[], order: 'asc' | 'desc'): ImageAsset[] {
+  return [...images].sort((a, b) => {
+    const aTime = new Date(a.uploadedAt).getTime();
+    const bTime = new Date(b.uploadedAt).getTime();
+
+    return order === 'asc' ? aTime - bTime : bTime - aTime;
+  });
+}
+
+async function readLegacyConfig(): Promise<Config> {
   try {
     const raw = await fs.readFile(CONFIG_FILE, 'utf-8');
     return JSON.parse(raw) as Config;
@@ -30,14 +54,60 @@ export async function loadConfig(): Promise<Config> {
       const raw = await fs.readFile(DEFAULT_CONFIG_FILE, 'utf-8');
       return JSON.parse(raw) as Config;
     } catch {
-      return DEFAULT_CONFIG;
+      return { ...DEFAULT_CONFIG };
     }
   }
 }
 
+export async function loadImageIndex(): Promise<ImageIndex> {
+  await ensureDirs();
+
+  try {
+    const raw = await fs.readFile(IMAGES_INDEX_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as ImageIndex;
+
+    return {
+      images: Array.isArray(parsed.images) ? parsed.images.map((image) => normalizeImageAsset(image)) : [],
+    };
+  } catch {
+    const legacyConfig = await readLegacyConfig();
+    const index: ImageIndex = {
+      images: Array.isArray(legacyConfig.images)
+        ? legacyConfig.images.map((image) => normalizeImageAsset(image))
+        : [],
+    };
+
+    await saveImageIndex(index);
+    return index;
+  }
+}
+
+export async function saveImageIndex(index: ImageIndex): Promise<void> {
+  await ensureDirs();
+  await fs.writeFile(IMAGES_INDEX_FILE, JSON.stringify(index, null, 2), 'utf-8');
+}
+
+export async function loadConfig(): Promise<Config> {
+  await ensureDirs();
+  const config = await readLegacyConfig();
+  const imageIndex = await loadImageIndex();
+
+  return {
+    currentPageId: config.currentPageId ?? null,
+    pages: Array.isArray(config.pages) ? config.pages : [],
+    images: imageIndex.images,
+  };
+}
+
 export async function saveConfig(config: Config): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+
+  await fs.writeFile(
+    CONFIG_FILE,
+    JSON.stringify({ currentPageId: config.currentPageId, pages: config.pages }, null, 2),
+    'utf-8',
+  );
+  await saveImageIndex({ images: config.images });
 }
 
 export async function addPage(name: string, content: string): Promise<PageInfo> {
@@ -137,6 +207,11 @@ function generateImagePageHtml(imageUrl: string): string {
 </html>`;
 }
 
+export async function listImages(order: 'asc' | 'desc' = 'desc'): Promise<ImageAsset[]> {
+  const index = await loadImageIndex();
+  return sortImagesByUploadedAt(index.images, order);
+}
+
 
 /** 保存图片文件并生成对应的 HTML 页面 */
 export async function addImage(name: string, buffer: Buffer, mimeType: string): Promise<{ image: ImageAsset; page: PageInfo }> {
@@ -144,29 +219,43 @@ export async function addImage(name: string, buffer: Buffer, mimeType: string): 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = mimeType.split('/')[1] || 'jpg';
   const filename = `${id}.${ext}`;
-  const imageAsset: ImageAsset = { id, filename, mimeType, uploadedAt: new Date().toISOString() };
+  const timestamp = new Date().toISOString();
 
   await fs.writeFile(path.join(IMAGES_DIR, filename), buffer);
-
-  // 保存图片元数据到配置
-  const config = await loadConfig();
-  if (!config.images) {
-    config.images = [];
-  }
-  config.images.push(imageAsset);
-  await saveConfig(config);
 
   const imageUrl = `/api/images/${id}`;
   const htmlContent = generateImagePageHtml(imageUrl);
   const page = await addPage(name, htmlContent);
 
+  const imageAsset: ImageAsset = {
+    id,
+    name,
+    filename,
+    mimeType,
+    size: buffer.byteLength,
+    uploadedAt: timestamp,
+    updatedAt: timestamp,
+    pageId: page.id,
+  };
+
+  const imageIndex = await loadImageIndex();
+  imageIndex.images.push(imageAsset);
+  await saveImageIndex(imageIndex);
+
   return { image: imageAsset, page };
+}
+
+export async function getImageAsset(id: string): Promise<ImageAsset | null> {
+  const imageIndex = await loadImageIndex();
+  const image = imageIndex.images.find((item) => item.id === id);
+
+  return image ?? null;
 }
 
 /** 获取图片文件内容 */
 export async function getImageContent(id: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const config = await loadConfig();
-  const image = config.images?.find((img) => img.id === id);
+  const imageIndex = await loadImageIndex();
+  const image = imageIndex.images.find((img) => img.id === id);
   if (!image) return null;
 
   try {
@@ -177,26 +266,55 @@ export async function getImageContent(id: string): Promise<{ buffer: Buffer; mim
   }
 }
 
+export async function renameImageAsset(id: string, name: string): Promise<ImageAsset | null> {
+  const imageIndex = await loadImageIndex();
+  const image = imageIndex.images.find((item) => item.id === id);
+
+  if (!image) {
+    return null;
+  }
+
+  image.name = name;
+  image.updatedAt = new Date().toISOString();
+  await saveImageIndex(imageIndex);
+
+  return image;
+}
+
 /** 删除图片及其对应的页面（如果存在） */
 export async function deleteImageAsset(id: string): Promise<boolean> {
-  const config = await loadConfig();
-  const idx = config.images?.findIndex((img) => img.id === id) ?? -1;
+  const imageIndex = await loadImageIndex();
+  const idx = imageIndex.images.findIndex((img) => img.id === id);
   if (idx === -1) return false;
 
-  const image = config.images![idx];
+  const image = imageIndex.images[idx];
   try {
     await fs.unlink(path.join(IMAGES_DIR, image.filename));
   } catch {
     // 文件可能已不存在，忽略错误
   }
 
-  config.images!.splice(idx, 1);
+  imageIndex.images.splice(idx, 1);
 
-  // 同时删除对应的页面（页面 ID 与图片 ID 相同）
-  await deletePage(id).catch(() => {});
+  if (image.pageId) {
+    await deletePage(image.pageId).catch(() => {});
+  }
 
-  await saveConfig(config);
+  await saveImageIndex(imageIndex);
   return true;
+}
+
+export async function deleteImageAssets(ids: string[]): Promise<string[]> {
+  const deletedIds: string[] = [];
+
+  for (const id of ids) {
+    const deleted = await deleteImageAsset(id);
+    if (deleted) {
+      deletedIds.push(id);
+    }
+  }
+
+  return deletedIds;
 }
 
 export async function getCurrentPageContent(): Promise<{ page: PageInfo | null; content: string | null }> {
