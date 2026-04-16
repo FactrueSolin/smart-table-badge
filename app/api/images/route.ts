@@ -1,11 +1,146 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addImage, deleteImageAssets, listImages } from '@/lib/storage';
 import { broadcast } from '@/lib/sse';
+import { createOpenApiRouteRegistrar } from '@/lib/openapi/registry';
+import { deletedIdsResponseSchema, errorResponseSchema } from '@/lib/openapi/schemas/common';
+import {
+  imageBatchDeleteRequestSchema,
+  imageListSchema,
+  imageListQuerySchema,
+  imageUploadRequestSchema,
+  imageUploadResponseSchema,
+} from '@/lib/openapi/schemas/image';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 type SortParam = 'uploadedAt-desc' | 'uploadedAt-asc';
+
+export const registerImagesCollectionOpenApi = createOpenApiRouteRegistrar((registry) => {
+  registry.registerPath({
+    method: 'get',
+    path: '/api/images',
+    tags: ['图床管理'],
+    summary: '获取图片列表',
+    request: {
+      query: imageListQuerySchema,
+    },
+    responses: {
+      200: {
+        description: '成功',
+        content: {
+          'application/json': {
+            schema: imageListSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/images',
+    tags: ['图床管理'],
+    summary: '上传图片并生成展示页',
+    request: {
+      body: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: imageUploadRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: '上传成功',
+        content: {
+          'application/json': {
+            schema: imageUploadResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: '缺少文件',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      413: {
+        description: '文件过大',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      415: {
+        description: '文件类型不支持',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      500: {
+        description: '上传失败',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'delete',
+    path: '/api/images',
+    tags: ['图床管理'],
+    summary: '批量删除图片',
+    request: {
+      body: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: imageBatchDeleteRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: '删除成功',
+        content: {
+          'application/json': {
+            schema: deletedIdsResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: '请求参数错误',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      500: {
+        description: '批量删除失败',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  });
+});
+
+registerImagesCollectionOpenApi();
 
 function getImageUrls(origin: string, imageId: string, pageId: string | null) {
   return {

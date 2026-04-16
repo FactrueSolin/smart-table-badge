@@ -1,378 +1,26 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: HTMLPush API
-  description: HTMLPush 是一个让手机浏览器变成"桌面显示器"的服务。后台上传/切换 HTML 内容，手机端通过 SSE 实时展示。
+  description: HTMLPush 是一个让手机浏览器变成桌面显示器的服务。后台上传或切换 HTML 内容，手机端读取同一份 API 文档产物。
   version: 0.1.0
-
 servers:
   - url: http://localhost:3000
     description: 本地开发环境
-
 tags:
   - name: 页面管理
-    description: HTML 页面的增删改查
+    description: HTML 页面的增删查
   - name: 图床管理
     description: 图片素材的上传、列表、重命名、删除与原图访问
   - name: 展示控制
-    description: 当前展示页面的切换
-  - name: 实时推送
-    description: SSE 实时推送
+    description: 当前展示页面的读取与切换
   - name: 认证
-    description: 管理后台认证
-
-paths:
-  /api/images:
-    get:
-      tags: [图床管理]
-      summary: 获取图片列表
-      parameters:
-        - name: sort
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [uploadedAt-desc, uploadedAt-asc]
-            default: uploadedAt-desc
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ImageAsset'
-    post:
-      tags: [图床管理]
-      summary: 上传图片并生成展示页
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                name:
-                  type: string
-                  description: 图片名称
-              required: [file]
-      responses:
-        '201':
-          description: 上传成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImageUploadResponse'
-        '400':
-          description: 缺少文件
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '413':
-          description: 文件过大
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '415':
-          description: 文件类型不支持
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    delete:
-      tags: [图床管理]
-      summary: 批量删除图片
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ImageBatchDeleteRequest'
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deletedIds:
-                    type: array
-                    items:
-                      type: string
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/images/{id}:
-    get:
-      tags: [图床管理]
-      summary: 获取原始图片内容
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 成功
-          content:
-            image/*:
-              schema:
-                type: string
-                format: binary
-        '404':
-          description: 图片不存在
-    patch:
-      tags: [图床管理]
-      summary: 重命名图片
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ImageRenameRequest'
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImageAsset'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: 图片不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    delete:
-      tags: [图床管理]
-      summary: 删除单张图片
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 删除成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted:
-                    type: boolean
-                  id:
-                    type: string
-        '404':
-          description: 图片不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/pages:
-    get:
-      tags: [页面管理]
-      summary: 获取所有页面列表
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PageInfo'
-    post:
-      tags: [页面管理]
-      summary: 上传 HTML 文件
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: HTML 文件
-                name:
-                  type: string
-                  description: 页面名称（可选，默认使用文件名）
-              required: [file]
-      responses:
-        '201':
-          description: 上传成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PageInfo'
-        '400':
-          description: 缺少文件
-
-  /api/pages/{id}:
-    get:
-      tags: [页面管理]
-      summary: 获取指定页面的 HTML 内容
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 成功
-          content:
-            text/html:
-              schema:
-                type: string
-        '404':
-          description: 页面不存在
-    delete:
-      tags: [页面管理]
-      summary: 删除指定页面
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 删除成功
-        '404':
-          description: 页面不存在
-
-  /api/current:
-    get:
-      tags: [展示控制]
-      summary: 获取当前展示的页面信息
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  page:
-                    $ref: '#/components/schemas/PageInfo'
-                  content:
-                    type: string
-                    description: HTML 内容
-    put:
-      tags: [展示控制]
-      summary: 切换当前展示的页面
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                pageId:
-                  type: string
-                  description: 要切换到的页面 ID
-              required: [pageId]
-      responses:
-        '200':
-          description: 切换成功
-        '400':
-          description: 缺少 pageId
-        '404':
-          description: 页面不存在
-
-  /api/sse:
-    get:
-      tags: [实时推送]
-      summary: SSE 实时推送端点
-      description: 建立 SSE 连接，接收内容变更事件。手机端应长期保持此连接。
-      responses:
-        '200':
-          description: SSE 连接成功
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                example: |
-                  event: connected
-                  data: {"clientId":"xxx"}
-
-                  event: content-changed
-                  data: {"action":"switch","pageId":"abc123","timestamp":1234567890}
-
-  /api/auth/login:
-    post:
-      tags: [认证]
-      summary: 管理后台登录
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                password:
-                  type: string
-                  description: 管理密码
-              required: [password]
-      responses:
-        '200':
-          description: 登录成功，设置 cookie
-        '401':
-          description: 密码错误
-
-  /api/auth/logout:
-    post:
-      tags: [认证]
-      summary: 退出登录
-      responses:
-        '200':
-          description: 退出成功
-
-  /api/auth/check:
-    get:
-      tags: [认证]
-      summary: 检查认证状态
-      responses:
-        '200':
-          description: 成功
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  authenticated:
-                    type: boolean
-
+    description: 管理后台认证接口
 components:
   schemas:
+    PageList:
+      type: array
+      items:
+        $ref: "#/components/schemas/PageInfo"
     PageInfo:
       type: object
       properties:
@@ -384,51 +32,194 @@ components:
           description: 页面名称
         filename:
           type: string
-          description: 存储的文件名
+          description: 存储文件名
         uploadedAt:
           type: string
           format: date-time
           description: 上传时间
+      required:
+        - id
+        - name
+        - filename
+        - uploadedAt
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+      required:
+        - error
+    PageUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: HTML 文件
+        name:
+          type: string
+          description: 页面名称，可选，默认使用文件名
+      required:
+        - file
+    DeletedByIdResponse:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+          enum:
+            - true
+          description: 删除成功标记
+        id:
+          type: string
+          description: 已删除资源 ID
+      required:
+        - deleted
+        - id
+    CurrentPageResponse:
+      type: object
+      properties:
+        page:
+          allOf:
+            - $ref: "#/components/schemas/PageInfo"
+            - type:
+                - object
+                - "null"
+              description: 当前展示页面
+        content:
+          type:
+            - string
+            - "null"
+          description: 当前页面 HTML 内容
+      required:
+        - page
+        - content
+    SwitchCurrentPageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+          description: 切换成功标记
+        pageId:
+          type: string
+          description: 当前页面 ID
+        timestamp:
+          type: integer
+          description: 操作时间戳
+      required:
+        - success
+        - pageId
+        - timestamp
+    SwitchCurrentPageRequest:
+      type: object
+      properties:
+        pageId:
+          type: string
+          minLength: 1
+          description: 要切换到的页面 ID
+      required:
+        - pageId
+    ImageList:
+      type: array
+      items:
+        $ref: "#/components/schemas/ImageAsset"
     ImageAsset:
+      allOf:
+        - $ref: "#/components/schemas/ImageAssetBase"
+        - type: object
+          properties:
+            imageUrl:
+              type: string
+              description: 原图访问地址
+            pageUrl:
+              type:
+                - string
+                - "null"
+              description: 关联页面访问地址
+          required:
+            - imageUrl
+            - pageUrl
+    ImageAssetBase:
       type: object
       properties:
         id:
           type: string
+          description: 图片唯一 ID
         name:
           type: string
+          description: 图片名称
         filename:
           type: string
+          description: 存储文件名
         mimeType:
           type: string
+          description: MIME 类型
         size:
           type: integer
+          minimum: 0
+          description: 文件大小，单位字节
         uploadedAt:
           type: string
           format: date-time
+          description: 上传时间
         updatedAt:
           type: string
           format: date-time
+          description: 更新时间
         pageId:
-          type: string
-          nullable: true
-        imageUrl:
-          type: string
-        pageUrl:
-          type: string
-          nullable: true
+          type:
+            - string
+            - "null"
+          description: 关联页面 ID
+      required:
+        - id
+        - name
+        - filename
+        - mimeType
+        - size
+        - uploadedAt
+        - updatedAt
+        - pageId
+    ImageSort:
+      type: string
+      enum:
+        - uploadedAt-desc
+        - uploadedAt-asc
+      description: 排序方式，默认按上传时间倒序
     ImageUploadResponse:
       type: object
       properties:
         image:
-          $ref: '#/components/schemas/ImageAsset'
+          $ref: "#/components/schemas/ImageAsset"
         page:
-          $ref: '#/components/schemas/PageInfo'
-    ImageRenameRequest:
+          $ref: "#/components/schemas/PageInfo"
+      required:
+        - image
+        - page
+    ImageUploadRequest:
       type: object
       properties:
+        file:
+          type: string
+          format: binary
+          description: 图片文件
         name:
           type: string
-      required: [name]
+          description: 图片名称
+      required:
+        - file
+    DeletedIdsResponse:
+      type: object
+      properties:
+        deletedIds:
+          type: array
+          items:
+            type: string
+          description: 已删除图片 ID 列表
+      required:
+        - deletedIds
     ImageBatchDeleteRequest:
       type: object
       properties:
@@ -436,9 +227,448 @@ components:
           type: array
           items:
             type: string
-      required: [ids]
-    ErrorResponse:
+            minLength: 1
+          minItems: 1
+          description: 待删除图片 ID 列表
+      required:
+        - ids
+    ImageRenameRequest:
       type: object
       properties:
-        error:
+        name:
           type: string
+          minLength: 1
+          description: 新的图片名称
+      required:
+        - name
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+      required:
+        - success
+    LoginRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+          description: 管理密码
+      required:
+        - password
+    AuthCheckResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+          description: 当前是否已登录
+      required:
+        - authenticated
+  parameters: {}
+paths:
+  /api/pages:
+    get:
+      tags:
+        - 页面管理
+      summary: 获取所有页面列表
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageList"
+    post:
+      tags:
+        - 页面管理
+      summary: 上传 HTML 文件
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/PageUploadRequest"
+      responses:
+        "201":
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageInfo"
+        "400":
+          description: 缺少文件
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 上传失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/pages/{id}:
+    get:
+      tags:
+        - 页面管理
+      summary: 获取指定页面的 HTML 内容
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            description: 资源 ID
+            example: 1776050757560-2g19q1
+          required: true
+          description: 资源 ID
+          name: id
+          in: path
+      responses:
+        "200":
+          description: 成功
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML 内容
+                example: <!DOCTYPE html><html><body>Hello</body></html>
+        "404":
+          description: 页面不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - 页面管理
+      summary: 删除指定页面
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            description: 资源 ID
+            example: 1776050757560-2g19q1
+          required: true
+          description: 资源 ID
+          name: id
+          in: path
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedByIdResponse"
+        "404":
+          description: 页面不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/current:
+    get:
+      tags:
+        - 展示控制
+      summary: 获取当前展示的页面信息
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentPageResponse"
+    put:
+      tags:
+        - 展示控制
+      summary: 切换当前展示的页面
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchCurrentPageRequest"
+      responses:
+        "200":
+          description: 切换成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwitchCurrentPageResponse"
+        "400":
+          description: 缺少 pageId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 页面不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 切换失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/images:
+    get:
+      tags:
+        - 图床管理
+      summary: 获取图片列表
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/ImageSort"
+          required: false
+          description: 排序方式，默认按上传时间倒序
+          name: sort
+          in: query
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageList"
+    post:
+      tags:
+        - 图床管理
+      summary: 上传图片并生成展示页
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImageUploadRequest"
+      responses:
+        "201":
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageUploadResponse"
+        "400":
+          description: 缺少文件
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: 文件过大
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: 文件类型不支持
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 上传失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - 图床管理
+      summary: 批量删除图片
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageBatchDeleteRequest"
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedIdsResponse"
+        "400":
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 批量删除失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/images/{id}:
+    get:
+      tags:
+        - 图床管理
+      summary: 获取原始图片内容
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            description: 资源 ID
+            example: 1776050757560-2g19q1
+          required: true
+          description: 资源 ID
+          name: id
+          in: path
+      responses:
+        "200":
+          description: 成功
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: 图片不存在
+    patch:
+      tags:
+        - 图床管理
+      summary: 重命名图片
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            description: 资源 ID
+            example: 1776050757560-2g19q1
+          required: true
+          description: 资源 ID
+          name: id
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageRenameRequest"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageAsset"
+        "400":
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: 图片不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 重命名失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - 图床管理
+      summary: 删除单张图片
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            description: 资源 ID
+            example: 1776050757560-2g19q1
+          required: true
+          description: 资源 ID
+          name: id
+          in: path
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedByIdResponse"
+        "404":
+          description: 图片不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/auth/login:
+    post:
+      tags:
+        - 认证
+      summary: 管理后台登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功，设置 cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: 请输入密码
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 密码错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 登录失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/auth/logout:
+    post:
+      tags:
+        - 认证
+      summary: 退出登录
+      responses:
+        "200":
+          description: 退出成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /api/auth/check:
+    get:
+      tags:
+        - 认证
+      summary: 检查认证状态
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthCheckResponse"
+webhooks: {}

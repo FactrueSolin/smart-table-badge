@@ -11,13 +11,18 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "openapi:generate": "tsx ./scripts/generate-openapi.ts",
+    "openapi:check": "tsx ./scripts/check-openapi.ts"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.1.0",
     "bcryptjs": "^3.0.3",
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -28,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^4.1.2"
   }

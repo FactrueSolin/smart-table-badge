@@ -2,6 +2,93 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentPageContent, setCurrentPage } from '@/lib/storage';
 import { broadcast } from '@/lib/sse';
 import { isAuthenticated, isValidCurrentPageApiToken } from '@/lib/auth';
+import { createOpenApiRouteRegistrar } from '@/lib/openapi/registry';
+import { errorResponseSchema } from '@/lib/openapi/schemas/common';
+import {
+  currentPageResponseSchema,
+  switchCurrentPageRequestSchema,
+  switchCurrentPageResponseSchema,
+} from '@/lib/openapi/schemas/current';
+
+export const registerCurrentOpenApi = createOpenApiRouteRegistrar((registry) => {
+  registry.registerPath({
+    method: 'get',
+    path: '/api/current',
+    tags: ['展示控制'],
+    summary: '获取当前展示的页面信息',
+    responses: {
+      200: {
+        description: '成功',
+        content: {
+          'application/json': {
+            schema: currentPageResponseSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'put',
+    path: '/api/current',
+    tags: ['展示控制'],
+    summary: '切换当前展示的页面',
+    request: {
+      body: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: switchCurrentPageRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: '切换成功',
+        content: {
+          'application/json': {
+            schema: switchCurrentPageResponseSchema,
+          },
+        },
+      },
+      400: {
+        description: '缺少 pageId',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      401: {
+        description: '未授权',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      404: {
+        description: '页面不存在',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+      500: {
+        description: '切换失败',
+        content: {
+          'application/json': {
+            schema: errorResponseSchema,
+          },
+        },
+      },
+    },
+  });
+});
+
+registerCurrentOpenApi();
 
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const cookieAuth = await isAuthenticated();
