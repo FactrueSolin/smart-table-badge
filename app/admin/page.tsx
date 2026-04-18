@@ -3,24 +3,14 @@
 import Image from 'next/image';
 import { useEffect, useState, useCallback, useRef } from 'react';
 
+import AIImageWorkspace from './_components/ai-image-workspace';
+import type { ImageAsset } from './_components/types';
+
 interface PageInfo {
   id: string;
   name: string;
   filename: string;
   uploadedAt: string;
-}
-
-interface ImageAsset {
-  id: string;
-  name: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  uploadedAt: string;
-  updatedAt: string;
-  pageId: string | null;
-  imageUrl: string;
-  pageUrl: string | null;
 }
 
 function toAbsoluteUrl(path: string): string {
@@ -36,6 +26,7 @@ function toAbsoluteUrl(path: string): string {
 }
 
 type ImageSort = 'uploadedAt-desc' | 'uploadedAt-asc';
+type ImageView = 'assets' | 'ai';
 
 type Tab = 'pages' | 'images' | 'editor' | 'guide' | 'api' | 'prompt';
 
@@ -86,6 +77,7 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('pages');
   const [imageSort, setImageSort] = useState<ImageSort>('uploadedAt-desc');
+  const [imageView, setImageView] = useState<ImageView>('assets');
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const [imageActionLoading, setImageActionLoading] = useState(false);
 
@@ -710,148 +702,239 @@ export default function AdminPage() {
 
         {activeTab === 'images' && (
           <div className="space-y-6">
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="rounded-[28px] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-[0_24px_72px_-52px_rgba(15,23,42,0.55)]">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">图床管理</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-100">图床管理</h2>
+                    <span className="rounded-full border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      二级工作台
+                    </span>
+                  </div>
                   <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    管理图片索引、直链、展示页以及批量删除。
+                    图片资产继续承载上传、直链与展示页；AI 生图作为同一资产链路下的任务工作台接入。
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={imageSort}
-                    onChange={(e) => setImageSort(e.target.value as ImageSort)}
-                    className="px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
-                  >
-                    <option value="uploadedAt-desc">最新上传</option>
-                    <option value="uploadedAt-asc">最早上传</option>
-                  </select>
+                <div className="inline-flex rounded-2xl border border-zinc-200 dark:border-zinc-700 p-1 bg-zinc-50 dark:bg-zinc-950/60">
                   <button
-                    onClick={handleBatchDeleteImages}
-                    disabled={selectedImageIds.length === 0 || imageActionLoading}
-                    className="px-4 py-2 text-sm font-medium rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setImageView('assets')}
+                    className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                      imageView === 'assets'
+                        ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                        : 'text-zinc-600 dark:text-zinc-400'
+                    }`}
                   >
-                    删除选中 {selectedImageIds.length > 0 ? `(${selectedImageIds.length})` : ''}
+                    图片资产
+                  </button>
+                  <button
+                    onClick={() => setImageView('ai')}
+                    className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+                      imageView === 'ai'
+                        ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                        : 'text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    AI 生图
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-              {images.length === 0 ? (
-                <p className="p-6 text-sm text-zinc-500 dark:text-zinc-400">暂无图片，请先上传图片。</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-zinc-50 dark:bg-zinc-950/40 border-b border-zinc-200 dark:border-zinc-800">
-                      <tr>
-                        <th className="px-4 py-3 text-left">
-                          <input
-                            type="checkbox"
-                            checked={allImagesSelected}
-                            onChange={handleToggleAllImages}
-                            className="h-4 w-4 rounded border-zinc-300"
-                          />
-                        </th>
-                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">预览</th>
-                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">名称</th>
-                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">格式 / 大小</th>
-                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">上传时间</th>
-                        <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {images.map((image) => (
-                        <tr key={image.id} className="align-top">
-                          <td className="px-4 py-4">
-                            <input
-                              type="checkbox"
-                              checked={selectedImageIds.includes(image.id)}
-                              onChange={() => handleToggleImageSelection(image.id)}
-                              className="h-4 w-4 rounded border-zinc-300"
-                            />
-                          </td>
-                          <td className="px-4 py-4">
-                            <Image
-                              src={image.imageUrl}
-                              alt={image.name}
-                              width={64}
-                              height={64}
-                              unoptimized
-                              className="h-16 w-16 rounded-xl object-cover border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800"
-                            />
-                          </td>
-                          <td className="px-4 py-4 min-w-52">
-                            <p className="font-medium text-zinc-900 dark:text-zinc-100">{image.name}</p>
-                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">ID: {image.id}</p>
-                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">{image.filename}</p>
-                          </td>
-                          <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
-                            <p>{image.mimeType}</p>
-                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{(image.size / 1024).toFixed(1)} KB</p>
-                          </td>
-                          <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
-                            <p>{new Date(image.uploadedAt).toLocaleString('zh-CN')}</p>
-                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">更新于 {new Date(image.updatedAt).toLocaleString('zh-CN')}</p>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => handleCopyText(image.imageUrl)}
-                                className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                              >
-                                {copied ? '已复制' : '复制直链'}
-                              </button>
-                              {image.pageUrl && (
-                                <button
-                                  onClick={() => handleCopyText(image.pageUrl ?? '')}
-                                  className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                                >
-                                  {copied ? '已复制' : '复制展示页'}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleRenameImage(image)}
-                                disabled={imageActionLoading}
-                                className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-full hover:bg-violet-500/20 disabled:opacity-50 transition-colors"
-                              >
-                                重命名
-                              </button>
-                              {image.pageUrl && (
-                                <a
-                                  href={image.pageUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2.5 py-1 text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-500/20 transition-colors"
-                                >
-                                  查看展示页
-                                </a>
-                              )}
-                              <a
-                                href={image.imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                              >
-                                原图
-                              </a>
-                              <button
-                                onClick={() => handleDeleteImage(image)}
-                                disabled={imageActionLoading}
-                                className="px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 rounded-full hover:bg-red-500/20 disabled:opacity-50 transition-colors"
-                              >
-                                删除
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {imageView === 'ai' ? (
+              <AIImageWorkspace images={images} onViewAssets={() => setImageView('assets')} />
+            ) : (
+              <>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]">
+                  <div className="rounded-[24px] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h3 className="text-base font-medium text-zinc-900 dark:text-zinc-100">图片资产</h3>
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          管理图片索引、直链、展示页以及批量删除。
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={imageSort}
+                          onChange={(e) => setImageSort(e.target.value as ImageSort)}
+                          className="px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+                        >
+                          <option value="uploadedAt-desc">最新上传</option>
+                          <option value="uploadedAt-asc">最早上传</option>
+                        </select>
+                        <button
+                          onClick={handleBatchDeleteImages}
+                          disabled={selectedImageIds.length === 0 || imageActionLoading}
+                          className="px-4 py-2 text-sm font-medium rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          删除选中 {selectedImageIds.length > 0 ? `(${selectedImageIds.length})` : ''}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">来源标识预览</p>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-2xl border border-sky-300/40 bg-sky-500/10 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full border border-sky-300 bg-sky-500/10 px-2.5 py-1 text-[11px] text-sky-700 dark:border-sky-400/20 dark:text-sky-300">
+                            AI 生成
+                          </span>
+                          <span className="text-sm text-zinc-700 dark:text-zinc-200">来源任务 / Prompt 摘要 / 生成时间</span>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                            手动上传
+                          </span>
+                          <span className="text-sm text-zinc-700 dark:text-zinc-200">保持当前图库使用习惯不变</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+                  {images.length === 0 ? (
+                    <p className="p-6 text-sm text-zinc-500 dark:text-zinc-400">暂无图片，请先上传图片。</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-zinc-50 dark:bg-zinc-950/40 border-b border-zinc-200 dark:border-zinc-800">
+                          <tr>
+                            <th className="px-4 py-3 text-left">
+                              <input
+                                type="checkbox"
+                                checked={allImagesSelected}
+                                onChange={handleToggleAllImages}
+                                className="h-4 w-4 rounded border-zinc-300"
+                              />
+                            </th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">预览</th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">名称</th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">来源</th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">格式 / 大小</th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">上传时间</th>
+                            <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                          {images.map((image) => {
+                            const isAIGenerated = /(^ai[-_ ]|ai生成|generated)/i.test(`${image.name} ${image.filename}`);
+
+                            return (
+                              <tr key={image.id} className="align-top">
+                                <td className="px-4 py-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedImageIds.includes(image.id)}
+                                    onChange={() => handleToggleImageSelection(image.id)}
+                                    className="h-4 w-4 rounded border-zinc-300"
+                                  />
+                                </td>
+                                <td className="px-4 py-4">
+                                  <Image
+                                    src={image.imageUrl}
+                                    alt={image.name}
+                                    width={64}
+                                    height={64}
+                                    unoptimized
+                                    className="h-16 w-16 rounded-xl object-cover border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800"
+                                  />
+                                </td>
+                                <td className="px-4 py-4 min-w-52">
+                                  <p className="font-medium text-zinc-900 dark:text-zinc-100">{image.name}</p>
+                                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">ID: {image.id}</p>
+                                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 break-all">{image.filename}</p>
+                                </td>
+                                <td className="px-4 py-4 min-w-44">
+                                  <div className="flex flex-col gap-2">
+                                    <span
+                                      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
+                                        isAIGenerated
+                                          ? 'border border-sky-300 bg-sky-500/10 text-sky-700 dark:border-sky-400/20 dark:text-sky-300'
+                                          : 'border border-zinc-300 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+                                      }`}
+                                    >
+                                      {isAIGenerated ? 'AI 生成' : '手动上传'}
+                                    </span>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                      {isAIGenerated
+                                        ? '设计稿预留：此处补充来源任务名称与 Prompt 摘要。'
+                                        : '当前为手动上传资产。'}
+                                    </p>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
+                                  <p>{image.mimeType}</p>
+                                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{(image.size / 1024).toFixed(1)} KB</p>
+                                </td>
+                                <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
+                                  <p>{new Date(image.uploadedAt).toLocaleString('zh-CN')}</p>
+                                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">更新于 {new Date(image.updatedAt).toLocaleString('zh-CN')}</p>
+                                </td>
+                                <td className="px-4 py-4">
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      onClick={() => handleCopyText(image.imageUrl)}
+                                      className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                    >
+                                      {copied ? '已复制' : '复制直链'}
+                                    </button>
+                                    {image.pageUrl && (
+                                      <button
+                                        onClick={() => handleCopyText(image.pageUrl ?? '')}
+                                        className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                      >
+                                        {copied ? '已复制' : '复制展示页'}
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleRenameImage(image)}
+                                      disabled={imageActionLoading}
+                                      className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 text-violet-600 dark:text-violet-400 rounded-full hover:bg-violet-500/20 disabled:opacity-50 transition-colors"
+                                    >
+                                      重命名
+                                    </button>
+                                    {image.pageUrl && (
+                                      <a
+                                        href={image.pageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2.5 py-1 text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-500/20 transition-colors"
+                                      >
+                                        查看展示页
+                                      </a>
+                                    )}
+                                    <a
+                                      href={image.imageUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                                    >
+                                      原图
+                                    </a>
+                                    <button
+                                      onClick={() => handleDeleteImage(image)}
+                                      disabled={imageActionLoading}
+                                      className="px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 rounded-full hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+                                    >
+                                      删除
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
