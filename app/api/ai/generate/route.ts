@@ -3,6 +3,40 @@ import { getAIConfig, getGuideContent, getPromptTemplate, buildPrompt, streamToL
 import { isAuthenticated } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+type ParsedGenerateBody =
+  | {
+    ok: true;
+    prompt: string;
+    currentHtml: string | null;
+  }
+  | {
+    ok: false;
+    error: string;
+  };
+
+function parseGenerateBody(body: unknown): ParsedGenerateBody {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: '请求参数错误' };
+  }
+
+  const { prompt, currentHtml } = body as { prompt?: unknown; currentHtml?: unknown };
+
+  if (typeof prompt !== 'string' || prompt.trim().length === 0) {
+    return { ok: false, error: 'prompt 不能为空' };
+  }
+
+  if (currentHtml !== undefined && currentHtml !== null && typeof currentHtml !== 'string') {
+    return { ok: false, error: 'currentHtml 必须是字符串' };
+  }
+
+  return {
+    ok: true,
+    prompt: prompt.trim(),
+    currentHtml: currentHtml ?? null,
+  };
+}
 
 export async function POST(request: NextRequest) {
   if (!(await isAuthenticated())) {
@@ -10,17 +44,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { prompt, currentHtml } = body as { prompt: string; currentHtml?: string };
-
-    if (!prompt?.trim()) {
-      return NextResponse.json({ error: 'prompt 不能为空' }, { status: 400 });
+    const parsedBody = parseGenerateBody((await request.json()) as unknown);
+    if (!parsedBody.ok) {
+      return NextResponse.json({ error: parsedBody.error }, { status: 400 });
     }
 
     const config = getAIConfig();
     const guideContent = await getGuideContent();
     const promptTemplate = await getPromptTemplate();
-    const fullPrompt = buildPrompt(promptTemplate, guideContent, prompt, currentHtml || null);
+    const fullPrompt = buildPrompt(promptTemplate, guideContent, parsedBody.prompt, parsedBody.currentHtml);
 
     const stream = await streamToLLM(config, fullPrompt, request.signal);
 
@@ -32,6 +64,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: '请求体格式错误' }, { status: 400 });
+    }
+
     if (error instanceof Error && error.name === 'AbortError') {
       return new NextResponse(null, { status: 204 });
     }
