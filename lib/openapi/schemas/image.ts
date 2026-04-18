@@ -16,6 +16,13 @@ export const imageAssetSchema = z.object({
   uploadedAt: z.string().datetime().openapi({ description: '上传时间' }),
   updatedAt: z.string().datetime().openapi({ description: '更新时间' }),
   pageId: z.string().nullable().openapi({ description: '关联页面 ID' }),
+  source: z.enum(['upload', 'ai_generated']).optional().openapi({ description: '图片来源' }),
+  generationJobId: z.string().nullable().optional().openapi({ description: '来源 AI 生图任务 ID' }),
+  generationOutputId: z.string().nullable().optional().openapi({ description: '来源 AI 生图输出 ID' }),
+  generatorProvider: z.string().nullable().optional().openapi({ description: '生成提供方' }),
+  generatorModel: z.string().nullable().optional().openapi({ description: '生成模型' }),
+  prompt: z.string().nullable().optional().openapi({ description: '生成提示词快照' }),
+  negativePrompt: z.string().nullable().optional().openapi({ description: '生成负向提示词快照' }),
 }).openapi('ImageAssetBase');
 
 export const imageAssetWithUrlsSchema = imageAssetSchema.extend({

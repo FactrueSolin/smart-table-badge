@@ -7,6 +7,8 @@ export const openApiTags = [
   { name: '图床管理', description: '图片素材的上传、列表、重命名、删除与原图访问' },
   { name: '展示控制', description: '当前展示页面的读取与切换' },
   { name: '认证', description: '管理后台认证接口' },
+  { name: 'AI 生图', description: '异步 AI 生图任务管理' },
+  { name: '内部任务', description: '仅供服务内部或定时任务调用的接口' },
 ] as const;
 
 export function generateOpenApiDocument() {

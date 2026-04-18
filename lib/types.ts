@@ -14,6 +14,13 @@ export interface ImageAsset {
   uploadedAt: string;
   updatedAt: string;
   pageId: string | null;
+  source?: 'upload' | 'ai_generated';
+  generationJobId?: string | null;
+  generationOutputId?: string | null;
+  generatorProvider?: string | null;
+  generatorModel?: string | null;
+  prompt?: string | null;
+  negativePrompt?: string | null;
 }
 
 export interface ImageIndex {

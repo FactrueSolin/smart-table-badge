@@ -12,6 +12,10 @@ import '@/app/api/images/[id]/route';
 import '@/app/api/auth/login/route';
 import '@/app/api/auth/logout/route';
 import '@/app/api/auth/check/route';
+import '@/app/api/ai/images/jobs/route';
+import '@/app/api/ai/images/jobs/[id]/route';
+import '@/app/api/ai/images/jobs/[id]/cancel/route';
+import '@/app/api/internal/ai/images/jobs/sync-due/route';
 
 async function main() {
   const document = generateOpenApiDocument();

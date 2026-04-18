@@ -27,6 +27,14 @@
     {
       "name": "认证",
       "description": "管理后台认证接口"
+    },
+    {
+      "name": "AI 生图",
+      "description": "异步 AI 生图任务管理"
+    },
+    {
+      "name": "内部任务",
+      "description": "仅供服务内部或定时任务调用的接口"
     }
   ],
   "components": {
@@ -255,6 +263,56 @@
               "null"
             ],
             "description": "关联页面 ID"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "ai_generated"
+            ],
+            "description": "图片来源"
+          },
+          "generationJobId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "来源 AI 生图任务 ID"
+          },
+          "generationOutputId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "来源 AI 生图输出 ID"
+          },
+          "generatorProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "生成提供方"
+          },
+          "generatorModel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "生成模型"
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "生成提示词快照"
+          },
+          "negativePrompt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "生成负向提示词快照"
           }
         },
         "required": [
@@ -389,6 +447,512 @@
         "required": [
           "authenticated"
         ]
+      },
+      "AiImageJobListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiImageJobSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "AiImageJobSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/AiImageProvider"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/AiImageMode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AiImageJobStatus"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "negativePrompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "steps": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "guidance": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "remoteTaskId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statusReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiImageJobOutput"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submittedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "mode",
+          "status",
+          "name",
+          "prompt",
+          "negativePrompt",
+          "model",
+          "size",
+          "seed",
+          "steps",
+          "guidance",
+          "remoteTaskId",
+          "statusReason",
+          "errorMessage",
+          "outputs",
+          "createdAt",
+          "updatedAt",
+          "submittedAt",
+          "completedAt"
+        ]
+      },
+      "AiImageProvider": {
+        "type": "string",
+        "enum": [
+          "modelscope"
+        ]
+      },
+      "AiImageMode": {
+        "type": "string",
+        "enum": [
+          "text_to_image"
+        ]
+      },
+      "AiImageJobStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "submitted",
+          "processing",
+          "succeeded",
+          "failed",
+          "timed_out",
+          "canceled",
+          "import_failed"
+        ]
+      },
+      "AiImageJobOutput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "outputIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remoteUrl": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AiImageOutputStatus"
+          },
+          "imageAssetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "outputIndex",
+          "remoteUrl",
+          "status",
+          "imageAssetId",
+          "pageId",
+          "imageUrl",
+          "pageUrl",
+          "errorMessage",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AiImageOutputStatus": {
+        "type": "string",
+        "enum": [
+          "pending_import",
+          "imported",
+          "import_failed"
+        ]
+      },
+      "AiImageErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/AiImageErrorCode"
+              },
+              "message": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "requestId"
+        ]
+      },
+      "AiImageErrorCode": {
+        "type": "string",
+        "enum": [
+          "AI_IMAGE_INVALID_INPUT",
+          "AI_IMAGE_MODEL_NOT_ALLOWED",
+          "AI_IMAGE_SIZE_NOT_ALLOWED",
+          "AI_IMAGE_JOB_NOT_FOUND",
+          "AI_IMAGE_JOB_STATE_CONFLICT",
+          "AI_IMAGE_PROVIDER_SUBMIT_FAILED",
+          "AI_IMAGE_PROVIDER_POLL_FAILED",
+          "AI_IMAGE_PROVIDER_TIMEOUT",
+          "AI_IMAGE_IMPORT_FAILED",
+          "AI_IMAGE_UNAUTHORIZED",
+          "AI_IMAGE_IDEMPOTENCY_CONFLICT"
+        ]
+      },
+      "AiImageJobResponse": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/AiImageJobDetail"
+          }
+        },
+        "required": [
+          "job"
+        ]
+      },
+      "AiImageJobDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AiImageJobSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "remoteRequestId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "syncAttempts": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "lastSyncedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "nextSyncAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "processingStartedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AiImageJobEvent"
+                }
+              }
+            },
+            "required": [
+              "remoteRequestId",
+              "syncAttempts",
+              "lastSyncedAt",
+              "nextSyncAt",
+              "processingStartedAt",
+              "events"
+            ]
+          }
+        ]
+      },
+      "AiImageJobEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AiImageEventType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AiImageJobStatus"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "reason",
+          "message",
+          "createdAt"
+        ]
+      },
+      "AiImageEventType": {
+        "type": "string",
+        "enum": [
+          "job_created",
+          "job_submitted",
+          "job_processing",
+          "job_succeeded",
+          "job_failed",
+          "job_canceled",
+          "job_import_failed",
+          "job_sync_failed",
+          "job_timed_out",
+          "job_polled"
+        ]
+      },
+      "AiImageCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "text_to_image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "negativePrompt": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "size": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "guidance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "name",
+          "mode",
+          "prompt",
+          "model"
+        ]
+      },
+      "AiImageSyncDueResponse": {
+        "type": "object",
+        "properties": {
+          "picked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "succeeded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "picked",
+          "processed",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "AiImageSyncDueRequest": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        }
       }
     },
     "parameters": {}
@@ -1040,6 +1604,322 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuthCheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/images/jobs": {
+      "get": {
+        "tags": [
+          "AI 生图"
+        ],
+        "summary": "获取 AI 生图任务列表",
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/AiImageJobStatus"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "$ref": "#/components/schemas/AiImageProvider"
+            },
+            "required": false,
+            "name": "provider",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "model",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageJobListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AI 生图"
+        ],
+        "summary": "创建 AI 生图任务",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiImageCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "幂等冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "模型约束不满足",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider 请求失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/images/jobs/{id}": {
+      "get": {
+        "tags": [
+          "AI 生图"
+        ],
+        "summary": "获取 AI 生图任务详情",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "sync",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai/images/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "AI 生图"
+        ],
+        "summary": "取消 AI 生图任务",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "任务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/ai/images/jobs/sync-due": {
+      "post": {
+        "tags": [
+          "内部任务"
+        ],
+        "summary": "推进到期的 AI 生图任务",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiImageSyncDueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageSyncDueResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiImageErrorResponse"
                 }
               }
             }

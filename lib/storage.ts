@@ -9,6 +9,16 @@ const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const DEFAULT_CONFIG_FILE = path.join(DATA_DIR, 'config.default.json');
 const IMAGES_INDEX_FILE = path.join(DATA_DIR, 'images.json');
 
+export interface AddImageOptions {
+  source?: 'upload' | 'ai_generated';
+  generationJobId?: string | null;
+  generationOutputId?: string | null;
+  generatorProvider?: string | null;
+  generatorModel?: string | null;
+  prompt?: string | null;
+  negativePrompt?: string | null;
+}
+
 const DEFAULT_CONFIG: Config = {
   currentPageId: null,
   pages: [],
@@ -33,6 +43,13 @@ function normalizeImageAsset(image: Partial<ImageAsset>): ImageAsset {
     uploadedAt,
     updatedAt: typeof image.updatedAt === 'string' ? image.updatedAt : uploadedAt,
     pageId: typeof image.pageId === 'string' ? image.pageId : null,
+    source: image.source === 'ai_generated' ? 'ai_generated' : 'upload',
+    generationJobId: typeof image.generationJobId === 'string' ? image.generationJobId : null,
+    generationOutputId: typeof image.generationOutputId === 'string' ? image.generationOutputId : null,
+    generatorProvider: typeof image.generatorProvider === 'string' ? image.generatorProvider : null,
+    generatorModel: typeof image.generatorModel === 'string' ? image.generatorModel : null,
+    prompt: typeof image.prompt === 'string' ? image.prompt : null,
+    negativePrompt: typeof image.negativePrompt === 'string' ? image.negativePrompt : null,
   };
 }
 
@@ -128,6 +145,11 @@ export async function addPage(name: string, content: string): Promise<PageInfo> 
   return pageInfo;
 }
 
+export async function getPageInfo(id: string): Promise<PageInfo | null> {
+  const config = await loadConfig();
+  return config.pages.find((page) => page.id === id) ?? null;
+}
+
 export async function deletePage(id: string): Promise<boolean> {
   const config = await loadConfig();
   const idx = config.pages.findIndex((p) => p.id === id);
@@ -214,7 +236,12 @@ export async function listImages(order: 'asc' | 'desc' = 'desc'): Promise<ImageA
 
 
 /** 保存图片文件并生成对应的 HTML 页面 */
-export async function addImage(name: string, buffer: Buffer, mimeType: string): Promise<{ image: ImageAsset; page: PageInfo }> {
+export async function addImage(
+  name: string,
+  buffer: Buffer,
+  mimeType: string,
+  options: AddImageOptions = {},
+): Promise<{ image: ImageAsset; page: PageInfo }> {
   await ensureDirs();
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ext = mimeType.split('/')[1] || 'jpg';
@@ -236,6 +263,13 @@ export async function addImage(name: string, buffer: Buffer, mimeType: string): 
     uploadedAt: timestamp,
     updatedAt: timestamp,
     pageId: page.id,
+    source: options.source ?? 'upload',
+    generationJobId: options.generationJobId ?? null,
+    generationOutputId: options.generationOutputId ?? null,
+    generatorProvider: options.generatorProvider ?? null,
+    generatorModel: options.generatorModel ?? null,
+    prompt: options.prompt ?? null,
+    negativePrompt: options.negativePrompt ?? null,
   };
 
   const imageIndex = await loadImageIndex();
@@ -250,6 +284,11 @@ export async function getImageAsset(id: string): Promise<ImageAsset | null> {
   const image = imageIndex.images.find((item) => item.id === id);
 
   return image ?? null;
+}
+
+export async function getImageAssetByGenerationOutputId(generationOutputId: string): Promise<ImageAsset | null> {
+  const imageIndex = await loadImageIndex();
+  return imageIndex.images.find((item) => item.generationOutputId === generationOutputId) ?? null;
 }
 
 /** 获取图片文件内容 */
