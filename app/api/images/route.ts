@@ -149,6 +149,15 @@ function getImageUrls(imageId: string, pageId: string | null) {
   };
 }
 
+function getUploadName(nameEntry: FormDataEntryValue | null, fallbackName: string): string {
+  if (typeof nameEntry !== 'string') {
+    return fallbackName;
+  }
+
+  const trimmedName = nameEntry.trim();
+  return trimmedName.length > 0 ? trimmedName : fallbackName;
+}
+
 export async function GET(request: NextRequest) {
   const sort = request.nextUrl.searchParams.get('sort') as SortParam | null;
   const order = sort === 'uploadedAt-asc' ? 'asc' : 'desc';
@@ -165,12 +174,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    const name = (formData.get('name') as string) || file?.name || '未命名图片';
+    const fileEntry = formData.get('file');
+    const file = fileEntry instanceof File ? fileEntry : null;
 
     if (!file) {
       return NextResponse.json({ error: '缺少文件' }, { status: 400 });
     }
+
+    const name = getUploadName(formData.get('name'), file.name || '未命名图片');
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return NextResponse.json({ error: '不支持的图片格式，仅支持 jpg、png、gif、webp、svg、avif' }, { status: 415 });
@@ -215,6 +226,10 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ deletedIds });
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: '请求参数错误' }, { status: 400 });
+    }
+
     console.error('[api/images] batch delete failed', err);
     return NextResponse.json({ error: '批量删除失败' }, { status: 500 });
   }

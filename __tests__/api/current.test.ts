@@ -46,8 +46,9 @@ describe('API: /api/current', () => {
   })
 
   describe('PUT /api/current', () => {
-    it('Cookie 鉴权成功切换页面返回 200', async () => {
+    it('PUT /api/current should switch page after cookie authentication', async () => {
       const { isAuthenticated } = await import('@/lib/auth')
+      const { broadcast } = await import('@/lib/sse')
       vi.mocked(isAuthenticated).mockResolvedValue(true)
 
       const { setCurrentPage } = await import('@/lib/storage')
@@ -65,9 +66,13 @@ describe('API: /api/current', () => {
       expect(response.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.pageId).toBe('1')
+      expect(vi.mocked(broadcast)).toHaveBeenCalledWith(
+        'content-changed',
+        expect.objectContaining({ action: 'switch', pageId: '1' }),
+      )
     })
 
-    it('Bearer Token 鉴权成功切换页面返回 200', async () => {
+    it('PUT /api/current should switch page after bearer token authentication', async () => {
       const { isAuthenticated, isValidCurrentPageApiToken } = await import('@/lib/auth')
       vi.mocked(isAuthenticated).mockResolvedValue(false)
       vi.mocked(isValidCurrentPageApiToken).mockReturnValue(true)
@@ -92,7 +97,7 @@ describe('API: /api/current', () => {
       expect(data.pageId).toBe('1')
     })
 
-    it('未授权返回 401', async () => {
+    it('PUT /api/current should return 401 when no auth mechanism passes', async () => {
       const { isAuthenticated, isValidCurrentPageApiToken } = await import('@/lib/auth')
       vi.mocked(isAuthenticated).mockResolvedValue(false)
       vi.mocked(isValidCurrentPageApiToken).mockReturnValue(false)
@@ -108,7 +113,7 @@ describe('API: /api/current', () => {
       expect(response.status).toBe(401)
     })
 
-    it('缺少 pageId 返回 400', async () => {
+    it('PUT /api/current should return 400 when pageId is missing', async () => {
       const { isAuthenticated } = await import('@/lib/auth')
       vi.mocked(isAuthenticated).mockResolvedValue(true)
 
@@ -123,7 +128,42 @@ describe('API: /api/current', () => {
       expect(response.status).toBe(400)
     })
 
-    it('页面不存在返回 404', async () => {
+    it('PUT /api/current should return 400 when pageId uses injected object payload', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
+      const request = new NextRequest('http://localhost/api/current', {
+        method: 'PUT',
+        body: JSON.stringify({ pageId: { $ne: null } }),
+      })
+
+      const { PUT } = await import('@/app/api/current/route')
+      const response = await PUT(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('缺少 pageId')
+    })
+
+    it('PUT /api/current should return 400 for malformed json body', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+
+      const request = new NextRequest('http://localhost/api/current', {
+        method: 'PUT',
+        body: '{"pageId":',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const { PUT } = await import('@/app/api/current/route')
+      const response = await PUT(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('请求体格式错误')
+    })
+
+    it('PUT /api/current should return 404 when target page does not exist', async () => {
       const { isAuthenticated } = await import('@/lib/auth')
       vi.mocked(isAuthenticated).mockResolvedValue(true)
 
@@ -139,6 +179,25 @@ describe('API: /api/current', () => {
       const response = await PUT(request)
 
       expect(response.status).toBe(404)
+    })
+
+    it('PUT /api/current should return 500 when storage update throws', async () => {
+      const { isAuthenticated } = await import('@/lib/auth')
+      const { setCurrentPage } = await import('@/lib/storage')
+      vi.mocked(isAuthenticated).mockResolvedValue(true)
+      vi.mocked(setCurrentPage).mockRejectedValue(new Error('disk failure'))
+
+      const request = new NextRequest('http://localhost/api/current', {
+        method: 'PUT',
+        body: JSON.stringify({ pageId: '1' }),
+      })
+
+      const { PUT } = await import('@/app/api/current/route')
+      const response = await PUT(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(500)
+      expect(data.error).toBe('切换失败')
     })
   })
 })

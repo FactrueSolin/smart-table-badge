@@ -59,10 +59,24 @@ export const registerAuthLoginOpenApi = createOpenApiRouteRegistrar((registry) =
 
 registerAuthLoginOpenApi();
 
+function getPasswordFromBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+
+  const { password } = body as { password?: unknown };
+  if (typeof password !== 'string') {
+    return null;
+  }
+
+  const trimmedPassword = password.trim();
+  return trimmedPassword.length > 0 ? trimmedPassword : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as { password?: string };
-    const { password } = body;
+    const body = (await request.json()) as unknown;
+    const password = getPasswordFromBody(body);
 
     if (!password) {
       return NextResponse.json({ error: '请输入密码' }, { status: 400 });
@@ -77,7 +91,11 @@ export async function POST(request: NextRequest) {
 
     await setAuthCookie();
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: '请求体格式错误' }, { status: 400 });
+    }
+
     return NextResponse.json({ error: '登录失败' }, { status: 500 });
   }
 }

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 vi.mock('@/lib/storage')
-vi.mock('@/lib/sse')
 
 describe('API: /api/pages', () => {
   beforeEach(() => {
@@ -32,7 +31,7 @@ describe('API: /api/pages', () => {
   })
 
   describe('POST /api/pages', () => {
-    it('上传文件创建页面', async () => {
+    it('POST /api/pages should create a page from uploaded html file', async () => {
       const { addPage } = await import('@/lib/storage')
       vi.mocked(addPage).mockResolvedValue({
         id: 'new-id',
@@ -55,9 +54,35 @@ describe('API: /api/pages', () => {
 
       expect(response.status).toBe(201)
       expect(data.id).toBe('new-id')
+      expect(vi.mocked(addPage)).toHaveBeenCalledWith('test.html', '<html></html>')
     })
 
-    it('存储失败时返回 500 并记录日志', async () => {
+    it('POST /api/pages should prefer a trimmed custom name when provided', async () => {
+      const { addPage } = await import('@/lib/storage')
+      vi.mocked(addPage).mockResolvedValue({
+        id: 'new-id',
+        name: '自定义页面',
+        filename: 'new-id.html',
+        uploadedAt: '2024-01-01',
+      })
+
+      const formData = new FormData()
+      formData.set('file', new Blob(['<html>custom</html>'], { type: 'text/html' }), 'fallback.html')
+      formData.set('name', '  自定义页面  ')
+
+      const request = new NextRequest('http://localhost/api/pages', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const { POST } = await import('@/app/api/pages/route')
+      const response = await POST(request)
+
+      expect(response.status).toBe(201)
+      expect(vi.mocked(addPage)).toHaveBeenCalledWith('自定义页面', '<html>custom</html>')
+    })
+
+    it('POST /api/pages should return 500 when storage layer throws', async () => {
       const { addPage } = await import('@/lib/storage')
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const storageError = new Error('EACCES: permission denied')
@@ -83,7 +108,7 @@ describe('API: /api/pages', () => {
       consoleErrorSpy.mockRestore()
     })
 
-    it('缺少文件返回 400', async () => {
+    it('POST /api/pages should return 400 when file is missing', async () => {
       const formData = new FormData()
       const request = new NextRequest('http://localhost/api/pages', {
         method: 'POST',
@@ -92,8 +117,27 @@ describe('API: /api/pages', () => {
 
       const { POST } = await import('@/app/api/pages/route')
       const response = await POST(request)
+      const data = await response.json()
 
       expect(response.status).toBe(400)
+      expect(data.error).toBe('缺少文件')
+    })
+
+    it('POST /api/pages should reject injected non-file form field for file', async () => {
+      const formData = new FormData()
+      formData.set('file', '<script>alert(1)</script>')
+
+      const request = new NextRequest('http://localhost/api/pages', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const { POST } = await import('@/app/api/pages/route')
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('缺少文件')
     })
   })
 })

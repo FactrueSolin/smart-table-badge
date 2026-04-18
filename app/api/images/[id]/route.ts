@@ -165,6 +165,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       pageUrl: image.pageId ? `/api/pages/${image.pageId}` : null,
     });
   } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: '请求参数错误' }, { status: 400 });
+    }
+
     console.error('[api/images/:id] rename failed', err);
     return NextResponse.json({ error: '重命名失败' }, { status: 500 });
   }

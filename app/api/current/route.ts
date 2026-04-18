@@ -90,6 +90,20 @@ export const registerCurrentOpenApi = createOpenApiRouteRegistrar((registry) => 
 
 registerCurrentOpenApi();
 
+function getPageIdFromBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+
+  const { pageId } = body as { pageId?: unknown };
+  if (typeof pageId !== 'string') {
+    return null;
+  }
+
+  const trimmedPageId = pageId.trim();
+  return trimmedPageId.length > 0 ? trimmedPageId : null;
+}
+
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const cookieAuth = await isAuthenticated();
   if (cookieAuth) {
@@ -119,8 +133,9 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { pageId } = body as { pageId?: string };
+    const body = (await request.json()) as unknown;
+    const pageId = getPageIdFromBody(body);
+
     if (!pageId) {
       return NextResponse.json({ error: '缺少 pageId' }, { status: 400 });
     }
@@ -132,7 +147,11 @@ export async function PUT(request: NextRequest) {
 
     broadcast('content-changed', { action: 'switch', pageId, timestamp: Date.now() });
     return NextResponse.json({ success: true, pageId, timestamp: Date.now() });
-  } catch {
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: '请求体格式错误' }, { status: 400 });
+    }
+
     return NextResponse.json({ error: '切换失败' }, { status: 500 });
   }
 }

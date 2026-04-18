@@ -68,6 +68,15 @@ export const registerPagesCollectionOpenApi = createOpenApiRouteRegistrar((regis
 
 registerPagesCollectionOpenApi();
 
+function getUploadName(nameEntry: FormDataEntryValue | null, fallbackName: string): string {
+  if (typeof nameEntry !== 'string') {
+    return fallbackName;
+  }
+
+  const trimmedName = nameEntry.trim();
+  return trimmedName.length > 0 ? trimmedName : fallbackName;
+}
+
 export async function GET() {
   const config = await loadConfig();
   return NextResponse.json(config.pages);
@@ -76,12 +85,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    const name = (formData.get('name') as string) || file?.name || '未命名页面';
+    const fileEntry = formData.get('file');
+    const file = fileEntry instanceof File ? fileEntry : null;
 
     if (!file) {
       return NextResponse.json({ error: '缺少文件' }, { status: 400 });
     }
+
+    const name = getUploadName(formData.get('name'), file.name || '未命名页面');
 
     const content = await file.text();
     const page = await addPage(name, content);
