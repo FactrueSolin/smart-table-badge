@@ -35,6 +35,7 @@
 - 魔搭 API-Inference 文档：`https://www.modelscope.cn/docs/model-service/API-Inference/intro`
 - 仓库内参考文档：`docs/ai生图参考文档/魔搭生图模型文档.md`
 - 魔搭官方 `modelscope-mcp-server` 的生图实现
+- 数据库设计补充：`docs/AI生图数据库设计.md`
 
 从这些资料可以确认当前魔搭生图接口的关键事实：
 
