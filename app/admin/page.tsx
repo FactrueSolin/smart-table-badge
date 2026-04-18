@@ -108,7 +108,8 @@ export default function AdminPage() {
   const [promptSaving, setPromptSaving] = useState(false);
 
   // 复制状态
-  const [copied, setCopied] = useState(false);
+  const [markdownCopied, setMarkdownCopied] = useState(false);
+  const [imageCopiedKey, setImageCopiedKey] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -316,10 +317,10 @@ export default function AdminPage() {
     ));
   };
 
-  const handleCopyText = async (content: string) => {
+  const handleCopyText = async (content: string, key: string) => {
     await navigator.clipboard.writeText(toAbsoluteUrl(content));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setImageCopiedKey(key);
+    setTimeout(() => setImageCopiedKey((current) => (current === key ? null : current)), 2000);
   };
 
   const handleRenameImage = async (image: ImageAsset) => {
@@ -428,8 +429,8 @@ export default function AdminPage() {
 
   const handleCopyMarkdown = async (content: string) => {
     await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setMarkdownCopied(true);
+    setTimeout(() => setMarkdownCopied(false), 2000);
   };
 
   // AI 生成 HTML（JSON Lines 协议，编辑器与预览共享 editorContent）
@@ -741,7 +742,13 @@ export default function AdminPage() {
             </div>
 
             {imageView === 'ai' ? (
-              <AIImageWorkspace images={images} onViewAssets={() => setImageView('assets')} />
+              <AIImageWorkspace
+                images={images}
+                onViewAssets={() => setImageView('assets')}
+                onAssetsChanged={() => {
+                  void fetchData();
+                }}
+              />
             ) : (
               <>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]">
@@ -822,7 +829,14 @@ export default function AdminPage() {
                         </thead>
                         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                           {images.map((image) => {
-                            const isAIGenerated = /(^ai[-_ ]|ai生成|generated)/i.test(`${image.name} ${image.filename}`);
+                            const isAIGenerated = image.source === 'ai_generated';
+                            const promptExcerpt = image.prompt
+                              ? image.prompt.length > 64
+                                ? `${image.prompt.slice(0, 64)}...`
+                                : image.prompt
+                              : null;
+                            const imageLinkCopyKey = `image:${image.id}:image`;
+                            const pageLinkCopyKey = `image:${image.id}:page`;
 
                             return (
                               <tr key={image.id} className="align-top">
@@ -862,9 +876,16 @@ export default function AdminPage() {
                                     </span>
                                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                                       {isAIGenerated
-                                        ? '设计稿预留：此处补充来源任务名称与 Prompt 摘要。'
+                                        ? image.generationJobId
+                                          ? `来源任务 ${image.generationJobId}`
+                                          : '来源任务待记录。'
                                         : '当前为手动上传资产。'}
                                     </p>
+                                    {isAIGenerated && promptExcerpt ? (
+                                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                        Prompt: {promptExcerpt}
+                                      </p>
+                                    ) : null}
                                   </div>
                                 </td>
                                 <td className="px-4 py-4 text-zinc-600 dark:text-zinc-300">
@@ -878,17 +899,17 @@ export default function AdminPage() {
                                 <td className="px-4 py-4">
                                   <div className="flex flex-wrap gap-2">
                                     <button
-                                      onClick={() => handleCopyText(image.imageUrl)}
+                                      onClick={() => handleCopyText(image.imageUrl, imageLinkCopyKey)}
                                       className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                                     >
-                                      {copied ? '已复制' : '复制直链'}
+                                      {imageCopiedKey === imageLinkCopyKey ? '已复制直链' : '复制直链'}
                                     </button>
                                     {image.pageUrl && (
                                       <button
-                                        onClick={() => handleCopyText(image.pageUrl ?? '')}
+                                        onClick={() => handleCopyText(image.pageUrl ?? '', pageLinkCopyKey)}
                                         className="px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                                       >
-                                        {copied ? '已复制' : '复制展示页'}
+                                        {imageCopiedKey === pageLinkCopyKey ? '已复制展示页' : '复制展示页'}
                                       </button>
                                     )}
                                     <button
@@ -1087,7 +1108,7 @@ export default function AdminPage() {
                 disabled={!guideContent}
                 className="px-3 py-1.5 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
               >
-                {copied ? '已复制' : '复制 Markdown'}
+                {markdownCopied ? '已复制' : '复制 Markdown'}
               </button>
             </div>
             <div className="p-6">
@@ -1143,7 +1164,7 @@ export default function AdminPage() {
                 onClick={() => handleCopyMarkdown(apiDocMarkdown)}
                 className="px-3 py-1.5 text-sm font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
-                {copied ? '已复制' : '复制 Markdown'}
+                {markdownCopied ? '已复制' : '复制 Markdown'}
               </button>
             </div>
             <div className="p-6">
