@@ -10,12 +10,41 @@ PATH=${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}
 export PATH
 
 load_env_file() {
-  if [ -f "$1" ]; then
-    set -a
-    # This file is owned by the deployment operator. Keep it simple and dotenv-shaped.
-    . "$1"
-    set +a
-  fi
+  [ -f "$1" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|'#'*) continue ;;
+      export\ *) line=${line#export } ;;
+    esac
+
+    key=${line%%=*}
+    [ "$key" != "$line" ] || continue
+
+    value=${line#*=}
+    key=$(printf '%s' "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    value=$(printf '%s' "$value" | sed 's/\r$//')
+
+    case "$key" in
+      ''|[0-9]*|*[!A-Za-z0-9_]*)
+        echo "Skipping invalid environment key '$key' from $1" >&2
+        continue
+        ;;
+    esac
+
+    case "$value" in
+      \"*\")
+        value=${value#\"}
+        value=${value%\"}
+        ;;
+      \'*\')
+        value=${value#\'}
+        value=${value%\'}
+        ;;
+    esac
+
+    export "$key=$value"
+  done < "$1"
 }
 
 load_env_file "$PROJECT_ROOT/.env"
@@ -24,9 +53,10 @@ load_env_file "$PROJECT_ROOT/.env.production"
 load_env_file "$PROJECT_ROOT/.env.production.local"
 
 NODE_ENV=${NODE_ENV:-production}
-HOSTNAME=${HOSTNAME:-0.0.0.0}
+SERVICE_HOST=${MACOS_SERVICE_HOST:-0.0.0.0}
+HOSTNAME=$SERVICE_HOST
 PORT=${PORT:-43210}
-export NODE_ENV HOSTNAME PORT
+export NODE_ENV HOSTNAME PORT MACOS_SERVICE_HOST
 
 PNPM_BIN=${PNPM_BIN:-}
 if [ -z "$PNPM_BIN" ]; then

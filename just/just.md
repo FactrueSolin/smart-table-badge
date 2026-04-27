@@ -2,6 +2,8 @@
 
 本项目的根目录 `justfile` 只作为命令入口，实际脚本统一维护在 `just/` 目录中。
 
+`justfile` 不直接加载 `.env`。环境文件由 macOS 服务启动脚本读取，这样密码或 token 中包含 `"`、`:`、`/` 等字符时，不会被 `just` 或 shell 提前解析。
+
 ## 前置要求
 
 - 安装 `just`
@@ -59,7 +61,7 @@ just deploy-macos
 默认服务会以当前用户运行，默认监听：
 
 ```text
-HOSTNAME=0.0.0.0
+MACOS_SERVICE_HOST=0.0.0.0
 PORT=43210
 ```
 
@@ -139,7 +141,7 @@ PORT=43210 just deploy-macos
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `PORT` | `43210` | 服务监听端口 |
-| `HOSTNAME` | `0.0.0.0` | 服务绑定地址 |
+| `MACOS_SERVICE_HOST` | `0.0.0.0` | 服务绑定地址，会写入 Next.js 需要的 `HOSTNAME` |
 | `MACOS_SERVICE_SCOPE` | `system` | `system` 或 `user` |
 | `MACOS_SERVICE_LABEL` | `com.factrue.smart-table-badge` | launchd 服务 label |
 | `MACOS_SERVICE_SLUG` | `smart-table-badge` | 日志目录和文件名使用的短名称 |

@@ -6,7 +6,7 @@ APP_SLUG=${MACOS_SERVICE_SLUG:-smart-table-badge}
 LABEL=${MACOS_SERVICE_LABEL:-com.factrue.smart-table-badge}
 SCOPE=${MACOS_SERVICE_SCOPE:-system}
 PORT=${PORT:-43210}
-HOSTNAME=${HOSTNAME:-0.0.0.0}
+SERVICE_HOST=${MACOS_SERVICE_HOST:-0.0.0.0}
 NODE_ENV=${NODE_ENV:-production}
 SKIP_INSTALL=${MACOS_DEPLOY_SKIP_INSTALL:-0}
 SKIP_CHECKS=${MACOS_DEPLOY_SKIP_CHECKS:-0}
@@ -31,7 +31,7 @@ Environment overrides:
   MACOS_SERVICE_SLUG=<name>              default: $APP_SLUG
   MACOS_SERVICE_USER=<mac-user>          default: current user
   PORT=<port>                            default: 43210
-  HOSTNAME=<bind-host>                   default: 0.0.0.0
+  MACOS_SERVICE_HOST=<bind-host>         default: 0.0.0.0
   NODE_BIN=<absolute-node-path>           default: command -v node
   PNPM_BIN=<absolute-pnpm-path>          default: command -v pnpm
   MACOS_DEPLOY_SKIP_INSTALL=1            skip pnpm install
@@ -189,7 +189,7 @@ write_plist() {
   escaped_pnpm_bin=$(xml_escape "$PNPM_BIN")
   escaped_node_bin=$(xml_escape "$NODE_BIN")
   escaped_port=$(xml_escape "$PORT")
-  escaped_hostname=$(xml_escape "$HOSTNAME")
+  escaped_service_host=$(xml_escape "$SERVICE_HOST")
   escaped_node_env=$(xml_escape "$NODE_ENV")
   escaped_path=$(xml_escape "$PATH_VALUE")
   escaped_stdout=$(xml_escape "$(stdout_log)")
@@ -218,7 +218,8 @@ write_plist() {
     printf '    <key>PNPM_BIN</key><string>%s</string>\n' "$escaped_pnpm_bin"
     printf '    <key>NODE_BIN</key><string>%s</string>\n' "$escaped_node_bin"
     printf '    <key>PORT</key><string>%s</string>\n' "$escaped_port"
-    printf '    <key>HOSTNAME</key><string>%s</string>\n' "$escaped_hostname"
+    printf '    <key>MACOS_SERVICE_HOST</key><string>%s</string>\n' "$escaped_service_host"
+    printf '    <key>HOSTNAME</key><string>%s</string>\n' "$escaped_service_host"
     printf '    <key>NODE_ENV</key><string>%s</string>\n' "$escaped_node_env"
     printf '    <key>PATH</key><string>%s</string>\n' "$escaped_path"
     printf '%s\n' '  </dict>'
@@ -285,7 +286,7 @@ install_service() {
   [ -x "$RUN_SCRIPT" ] || die "$RUN_SCRIPT must be executable"
 
   echo "Deploying $LABEL from $PROJECT_ROOT"
-  echo "Scope: $SCOPE, user: $SERVICE_USER, port: $PORT"
+  echo "Scope: $SCOPE, user: $SERVICE_USER, host: $SERVICE_HOST, port: $PORT"
   prepare_project
   install_plist
   echo "Deployed. Service target: $(service_target)"

@@ -1,4 +1,3 @@
-set dotenv-load := true
 set shell := ["sh", "-eu", "-c"]
 
 default:
