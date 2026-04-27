@@ -11,6 +11,10 @@ vi.mock('@/lib/sse', () => ({
 }));
 
 function buildJob(overrides: Partial<ImageGenerationJobRecord> = {}): ImageGenerationJobRecord {
+  const now = Date.now();
+  const submittedAt = new Date(now - 1_000).toISOString();
+  const nextSyncAt = new Date(now - 1).toISOString();
+
   return {
     id: 'job_test',
     provider: 'modelscope',
@@ -30,8 +34,8 @@ function buildJob(overrides: Partial<ImageGenerationJobRecord> = {}): ImageGener
     errorMessage: null,
     syncAttempts: 0,
     lastSyncedAt: null,
-    nextSyncAt: '2026-04-19T00:00:00.000Z',
-    submittedAt: '2026-04-19T00:00:00.000Z',
+    nextSyncAt,
+    submittedAt,
     processingStartedAt: null,
     completedAt: null,
     idempotencyKey: null,
@@ -40,8 +44,8 @@ function buildJob(overrides: Partial<ImageGenerationJobRecord> = {}): ImageGener
     providerResponsePayload: null,
     outputs: [],
     events: [],
-    createdAt: '2026-04-19T00:00:00.000Z',
-    updatedAt: '2026-04-19T00:00:00.000Z',
+    createdAt: submittedAt,
+    updatedAt: submittedAt,
     ...overrides,
   };
 }
